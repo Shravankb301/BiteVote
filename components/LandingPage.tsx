@@ -1,17 +1,19 @@
 'use client'
 
 import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { nanoid } from 'nanoid'
 
-export default function LandingPage() {
+interface LandingPageProps {
+  onGroupCreated: () => void;
+}
+
+export default function LandingPage({ onGroupCreated }: LandingPageProps) {
   const [groupName, setGroupName] = useState('')
   const [userName, setUserName] = useState('')
-  const router = useRouter()
 
   const handleCreateGroup = () => {
     if (!groupName.trim() || !userName.trim()) return
@@ -26,8 +28,8 @@ export default function LandingPage() {
     // Store group data in localStorage (in a real app, this would be sent to a server)
     localStorage.setItem('group', JSON.stringify(group))
 
-    // Navigate to the main app page
-    router.push('/app')
+    // Call the onGroupCreated callback
+    onGroupCreated()
   }
 
   return (

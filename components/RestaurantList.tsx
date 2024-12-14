@@ -1,3 +1,4 @@
+"use client"
 import React, { useState } from 'react'
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -10,105 +11,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+// import { Checkbox } from "@/components/ui/checkbox"
 import { Clock, MapPin, DollarSign, Star, Phone, Globe, UtensilsCrossed, Tag } from 'lucide-react'
 
-// Expanded restaurant data
-const restaurants = [
-  { 
-    id: '1', 
-    name: 'Pizza Place', 
-    cuisine: 'Italian', 
-    rating: 4.5, 
-    priceRange: 2,
-    openingHours: '11:00 AM - 10:00 PM',
-    distance: 0.5,
-    dietaryOptions: ['vegetarian'],
-    contact: '+1 (555) 123-4567',
-    website: 'https://pizzaplace.com',
-    menuUrl: 'https://pizzaplace.com/menu',
-    photoUrl: 'https://example.com/pizzaplace.jpg',
-    ambiance: 'casual',
-    serviceTypes: ['dine-in', 'takeout', 'delivery'],
-    tags: ['family-friendly', 'great for groups']
-  },
-  { 
-    id: '2', 
-    name: 'Burger Joint', 
-    cuisine: 'American', 
-    rating: 4.2, 
-    priceRange: 1,
-    openingHours: '10:00 AM - 11:00 PM',
-    distance: 1.2,
-    dietaryOptions: ['gluten-free'],
-    contact: '+1 (555) 987-6543',
-    website: 'https://burgerjoint.com',
-    menuUrl: 'https://burgerjoint.com/menu',
-    photoUrl: 'https://example.com/burgerjoint.jpg',
-    ambiance: 'casual',
-    serviceTypes: ['dine-in', 'takeout'],
-    tags: ['quick service', 'late night']
-  },
-  { 
-    id: '3', 
-    name: 'Sushi Spot', 
-    cuisine: 'Japanese', 
-    rating: 4.8, 
-    priceRange: 3,
-    openingHours: '12:00 PM - 10:00 PM',
-    distance: 0.8,
-    dietaryOptions: ['vegan', 'gluten-free'],
-    contact: '+1 (555) 246-8101',
-    website: 'https://sushispot.com',
-    menuUrl: 'https://sushispot.com/menu',
-    photoUrl: 'https://example.com/sushispot.jpg',
-    ambiance: 'formal',
-    serviceTypes: ['dine-in', 'takeout'],
-    tags: ['date night', 'quiet atmosphere']
-  },
-  { 
-    id: '4', 
-    name: 'Taco Town', 
-    cuisine: 'Mexican', 
-    rating: 4.3, 
-    priceRange: 1,
-    openingHours: '11:00 AM - 9:00 PM',
-    distance: 1.5,
-    dietaryOptions: ['vegetarian'],
-    contact: '+1 (555) 369-2580',
-    website: 'https://tacotown.com',
-    menuUrl: 'https://tacotown.com/menu',
-    photoUrl: 'https://example.com/tacotown.jpg',
-    ambiance: 'casual',
-    serviceTypes: ['dine-in', 'takeout', 'delivery'],
-    tags: ['quick service', 'great for lunch']
-  },
-  { 
-    id: '5', 
-    name: 'Curry House', 
-    cuisine: 'Indian', 
-    rating: 4.6, 
-    priceRange: 2,
-    openingHours: '12:00 PM - 11:00 PM',
-    distance: 2.0,
-    dietaryOptions: ['vegetarian', 'vegan'],
-    contact: '+1 (555) 147-2589',
-    website: 'https://curryhouse.com',
-    menuUrl: 'https://curryhouse.com/menu',
-    photoUrl: 'https://example.com/curryhouse.jpg',
-    ambiance: 'casual',
-    serviceTypes: ['dine-in', 'takeout', 'delivery'],
-    tags: ['spicy food', 'great for groups']
-  },
-]
-
-interface RestaurantListProps {
-  group: { name: string; members: string[]; code: string } | null
+interface Restaurant {
+  id: string;
+  name: string;
+  cuisine: string;
+  rating: number;
+  priceRange: number;
+  openingHours: string;
+  distance: number;
+  dietaryOptions: string[];
+  contact: string;
+  website: string;
+  menuUrl: string;
+  photoUrl: string;
+  ambiance: string;
+  serviceTypes: string[];
+  tags: string[];
 }
 
-export default function RestaurantList({ group }: RestaurantListProps) {
+interface RestaurantListProps {
+  restaurants: Restaurant[];
+}
+
+export default function RestaurantList({ restaurants }: RestaurantListProps) {
   const [dietaryFilter, setDietaryFilter] = useState<string[]>([])
   const [cuisineFilter, setCuisineFilter] = useState<string>('all')
   const [priceFilter, setPriceFilter] = useState<number>(3)

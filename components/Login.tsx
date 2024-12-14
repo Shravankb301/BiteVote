@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
-import { useHistory } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 
 interface LoginProps {
   onLogin: (user: { name: string }) => void;
@@ -7,53 +10,43 @@ interface LoginProps {
 
 export default function Login({ onLogin }: LoginProps) {
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const history = useHistory();
+  const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, you would authenticate with a server here
-    onLogin({ name: username });
-    history.push('/');
+    if (username.trim()) {
+      onLogin({ name: username });
+      router.push('/');  // Navigate to home after login
+    }
   };
 
   return (
-    <div className="max-w-md mx-auto mt-8">
-      <h2 className="text-2xl font-bold mb-4">Login</h2>
-      <form onSubmit={handleLogin} className="space-y-4">
+    <div className="min-h-screen bg-gradient-to-b from-blue-100 to-blue-200 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <Card className="p-8 bg-white shadow-lg rounded-lg max-w-md w-full space-y-8">
         <div>
-          <label htmlFor="username" className="block mb-1">
-            Username
-          </label>
-          <input
-            type="text"
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2"
-            required
-          />
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-blue-700">
+            Login to LunchVote
+          </h2>
         </div>
-        <div>
-          <label htmlFor="password" className="block mb-1">
-            Password
-          </label>
-          <input
-            type="password"
-            id="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full border border-gray-300 rounded px-3 py-2"
-            required
-          />
-        </div>
-        <button
-          type="submit"
-          className="w-full bg-blue-500 text-white font-bold py-2 px-4 rounded hover:bg-blue-700"
-        >
-          Login
-        </button>
-      </form>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <Input
+              type="text"
+              placeholder="Enter your username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="appearance-none rounded-md relative block w-full px-3 py-2 border border-blue-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+            />
+          </div>
+          <Button
+            type="submit"
+            className="w-full bg-blue-500 hover:bg-blue-600 text-white"
+            disabled={!username.trim()}
+          >
+            Sign in
+          </Button>
+        </form>
+      </Card>
     </div>
   );
 }

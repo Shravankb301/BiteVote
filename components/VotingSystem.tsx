@@ -3,17 +3,18 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
-const restaurants = [
-  { id: '1', name: 'Pizza Place', cuisine: 'Italian', rating: 4.5 },
-  { id: '2', name: 'Burger Joint', cuisine: 'American', rating: 4.2 },
-  { id: '3', name: 'Sushi Spot', cuisine: 'Japanese', rating: 4.8 },
-]
-
-interface VotingSystemProps {
-  group: { name: string; members: string[]; code: string } | null
+interface Restaurant {
+  id: string;
+  name: string;
+  cuisine: string;
+  rating: number;
 }
 
-export default function VotingSystem({ group }: VotingSystemProps) {
+interface VotingSystemProps {
+  restaurants: Restaurant[];
+}
+
+export default function VotingSystem({ restaurants }: VotingSystemProps) {
   const [votes, setVotes] = useState<Record<string, number>>({})
 
   const handleVote = (restaurantId: string) => {

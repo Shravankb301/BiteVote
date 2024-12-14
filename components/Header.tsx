@@ -1,39 +1,27 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 
 interface HeaderProps {
   user: { name: string } | null;
-  onLogout: () => void;
 }
 
-export default function Header({ user, onLogout }: HeaderProps) {
+export default function Header({ user }: HeaderProps) {
   return (
-    <header className="bg-blue-600 text-white p-4">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link to="/" className="text-2xl font-bold">
-          LunchVote
-        </Link>
-        <nav>
+    <header className="bg-white shadow">
+      <nav className="container mx-auto px-4 py-3">
+        <div className="flex justify-between items-center">
+          <Link href="/" className="text-xl font-bold text-blue-600">
+            LunchVote
+          </Link>
           {user ? (
-            <div className="flex items-center space-x-4">
-              <span>Welcome, {user.name}</span>
-              <button
-                onClick={onLogout}
-                className="bg-white text-blue-600 px-4 py-2 rounded hover:bg-blue-100"
-              >
-                Logout
-              </button>
-            </div>
+            <span className="text-gray-600">Welcome, {user.name}</span>
           ) : (
-            <Link
-              to="/login"
-              className="bg-white text-blue-600 px-4 py-2 rounded hover:bg-blue-100"
-            >
+            <Link href="/login" className="text-blue-600">
               Login
             </Link>
           )}
-        </nav>
-      </div>
+        </div>
+      </nav>
     </header>
   );
 }
