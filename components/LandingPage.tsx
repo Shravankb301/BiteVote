@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { nanoid } from 'nanoid'
 import { Badge } from "./ui/badge"
-import { ArrowRight, Clock, Users, Check, X } from 'lucide-react'
+import { ArrowRight, Clock, Check, X } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -53,7 +53,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
               Stop asking
               <br />
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-blue-600">
-                "What do you want to eat?"
+                &ldquo;What do you want to eat?&rdquo;
               </span>
             </h1>
             <p className="text-xl text-slate-400 mb-8 max-w-2xl mx-auto">
@@ -214,7 +214,7 @@ const features = [
     description: "Create a group and invite friends in seconds. No registration required."
   },
   {
-    icon: "⚡",
+    icon: "���",
     title: "Real-time Voting",
     description: "Everyone votes simultaneously. No waiting for responses."
   },

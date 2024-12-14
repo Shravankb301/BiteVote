@@ -1,18 +1,5 @@
 "use client"
-import React, { useState } from 'react'
-import { Badge } from "@/components/ui/badge"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Slider } from "@/components/ui/slider"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-// import { Checkbox } from "@/components/ui/checkbox"
-import { Clock, MapPin, DollarSign, Star, Phone, Globe, UtensilsCrossed, Tag } from 'lucide-react'
+import React from 'react'
 
 interface Restaurant {
   id: string;

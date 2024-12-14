@@ -159,7 +159,20 @@ export default function GroupPage() {
             <Card className="p-6 bg-slate-900/50 border-slate-800">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-semibold text-white">Restaurants</h2>
-                <Button variant="outline" className="border-slate-700">
+                <Button 
+                  onClick={() => {
+                    const newRestaurant: Restaurant = {
+                      id: `${Date.now()}`,
+                      name: 'New Restaurant',
+                      cuisine: 'Various',
+                      rating: 4.0,
+                      priceRange: '$$',
+                    }
+                    setRestaurants(prev => [...prev, newRestaurant])
+                  }}
+                  variant="outline" 
+                  className="border-slate-700"
+                >
                   Add Restaurant
                   <ChevronRight className="w-4 h-4 ml-2" />
                 </Button>
