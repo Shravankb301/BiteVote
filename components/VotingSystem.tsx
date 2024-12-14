@@ -8,6 +8,8 @@ interface Restaurant {
   name: string;
   cuisine: string;
   rating: number;
+  priceRange: string;
+  image?: string;
 }
 
 interface VotingSystemProps {
@@ -33,38 +35,21 @@ export default function VotingSystem({ restaurants }: VotingSystemProps) {
   const winningRestaurant = getWinningRestaurant()
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4">
-        {restaurants.map((restaurant) => (
-          <Card key={restaurant.id} className="p-4 bg-white hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <h3 className="text-xl font-semibold text-blue-700">{restaurant.name}</h3>
-                <p className="text-sm text-blue-500">
-                  {restaurant.cuisine} · Rating: {restaurant.rating}
-                </p>
-                <p className="text-sm text-blue-600">Votes: {votes[restaurant.id] || 0}</p>
-              </div>
-              <Button onClick={() => handleVote(restaurant.id)} className="bg-blue-500 hover:bg-blue-600 text-white">
-                Vote
-              </Button>
-            </div>
-          </Card>
-        ))}
-      </div>
-      {winningRestaurant && (
-        <Card className="p-4 border-2 border-yellow-500 bg-yellow-50">
-          <div className="space-y-2">
-            <h3 className="text-xl font-bold text-yellow-700">Current Winner</h3>
-            <div className="flex items-center justify-between">
-              <p className="text-yellow-600">{winningRestaurant.name}</p>
-              <Badge variant="secondary" className="bg-yellow-200 text-yellow-700">
-                {votes[winningRestaurant.id]} votes
-              </Badge>
-            </div>
+    <div className="space-y-4">
+      {restaurants.map((restaurant) => (
+        <div
+          key={restaurant.id}
+          className="flex items-center justify-between p-4 rounded-lg bg-slate-800/50"
+        >
+          <div>
+            <h3 className="font-medium text-white">{restaurant.name}</h3>
+            <div className="text-sm text-slate-400">{restaurant.cuisine}</div>
           </div>
-        </Card>
-      )}
+          <Button variant="outline" className="border-slate-700">
+            Vote
+          </Button>
+        </div>
+      ))}
     </div>
   )
 }
