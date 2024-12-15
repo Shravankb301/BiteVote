@@ -125,3 +125,19 @@ html {
 .animate-spin-slow {
   animation: spin-slow 3s linear infinite;
 }
+
+@keyframes pulse-border {
+  0% {
+    border-color: rgba(59, 130, 246, 0.2);
+  }
+  50% {
+    border-color: rgba(59, 130, 246, 0.4);
+  }
+  100% {
+    border-color: rgba(59, 130, 246, 0.2);
+  }
+}
+
+.animate-border-pulse {
+  animation: pulse-border 2s infinite;
+}
