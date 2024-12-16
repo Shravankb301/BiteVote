@@ -80,33 +80,30 @@ export function RestaurantCard({
             <Card className="p-4 bg-slate-900/50 border-slate-800 hover:bg-slate-900/70 transition-all duration-300">
                 <div className="space-y-2">
                     <div className="flex justify-between items-start">
-                        <h3 className="font-semibold text-lg text-white">{name}</h3>
-                        <div className="flex items-center gap-1">
-                            <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                            <span className="text-sm text-slate-200">{rating?.toFixed(1) || 'N/A'}</span>
+                        <div>
+                            <h3 className="font-semibold text-lg text-white">{name}</h3>
+                            <div className="flex items-center gap-2 text-sm text-slate-400 mt-1">
+                                <span>{cuisine}</span>
+                                <span>•</span>
+                                <span>{priceRange}</span>
+                                <span>•</span>
+                                <span>{(distance / 1000).toFixed(1)}km</span>
+                            </div>
+                            <p className="text-sm text-slate-500 mt-1">{vicinity}</p>
                         </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-slate-400">
-                        <span>{cuisine}</span>
-                        <span>•</span>
-                        <span>{priceRange}</span>
-                        <span>•</span>
-                        <span>{(distance / 1000).toFixed(1)}km</span>
-                    </div>
-                    <p className="text-sm text-slate-500">{vicinity}</p>
-                    
-                    <div className="flex justify-between items-center">
-                        <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => setShowCallDialog(true)}
-                            disabled={false}
-                            className="text-blue-400 hover:text-blue-300"
-                        >
-                            <Phone className="w-4 h-4 mr-2" />
-                            Make Test Call
-                        </Button>
-                        <Button onClick={onAddToVoting}>Add to Voting</Button>
+                        <div className="flex flex-col items-end gap-2 ml-4">
+                            <div className="flex items-center gap-1">
+                                <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                                <span className="text-sm text-slate-200">{rating?.toFixed(1) || 'N/A'}</span>
+                            </div>
+                            <Button 
+                                onClick={onAddToVoting} 
+                                className="whitespace-nowrap px-4 py-2 text-sm font-medium"
+                            >
+                                <Plus className="w-5 h-5 mr-2" />
+                                Add to Voting
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </Card>

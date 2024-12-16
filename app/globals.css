@@ -2,9 +2,28 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Add these styles at the top of your globals.css */
+html, body {
+  overflow-x: hidden;
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
 body {
   font-family: Arial, Helvetica, sans-serif;
   @apply bg-slate-950;
+  position: relative; /* Add this to prevent horizontal scroll */
+  width: 100%;
+}
+
+/* Add this class */
+.page-no-scroll {
+  @apply overflow-hidden;
 }
 
 @layer base {
@@ -140,4 +159,32 @@ html {
 
 .animate-border-pulse {
   animation: pulse-border 2s infinite;
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+  }
+  
+  .scrollbar-thumb-slate-700::-webkit-scrollbar-thumb {
+    background-color: rgb(51, 65, 85);
+    border-radius: 6px;
+  }
+  
+  .scrollbar-track-slate-800::-webkit-scrollbar-track {
+    background-color: rgb(30, 41, 59);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;     /* Firefox */
+  }
+  
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
 }

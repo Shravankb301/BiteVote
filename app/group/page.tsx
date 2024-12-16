@@ -142,7 +142,7 @@ export default function GroupPage() {
   if (!groupData) return null
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950">
+    <div className="min-h-screen bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950 page-no-scroll">
       {/* Header Section with Enhanced Styling */}
       <div className="bg-slate-900/30 border-b border-slate-800/50 backdrop-blur-lg sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
@@ -152,8 +152,9 @@ export default function GroupPage() {
                 {groupData.name}
               </h1>
               <Badge 
-                className="bg-blue-500/10 text-blue-500 border-blue-500/20 animate-pulse"
+                className="bg-green-500/10 text-green-500 border-green-500/20 animate-pulse relative pl-6"
               >
+                <span className="absolute left-2 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-green-500"></span>
                 Live Session
               </Badge>
             </div>
@@ -161,114 +162,86 @@ export default function GroupPage() {
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
-        <LocationInput onLocationSelect={handleLocationSelect} />
-        {error && (
-            <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                <p className="text-red-500">{error}</p>
-            </div>
-        )}
+      <div className="container mx-auto px-4 py-8 overflow-hidden">
         {/* Top Stats Row */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          {/* Time Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Card className="p-4 bg-slate-900/30 border-slate-800/50 hover:bg-slate-900/50 transition-all duration-300 group">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gradient-to-br from-blue-500/20 via-indigo-500/20 to-purple-500/20 rounded-lg 
-                                group-hover:from-blue-500/30 group-hover:via-indigo-500/30 group-hover:to-purple-500/30 
-                                transition-all duration-300">
-                  <Clock className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-400">Time Left</p>
-                  <p className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-indigo-400">5:00</p>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            {/* Members Count */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+            >
+                <Card className="p-4 bg-slate-900/50 border-slate-800 hover:bg-slate-900/70 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-purple-500/10 rounded-lg">
+                            <Users className="w-5 h-5 text-purple-400" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-slate-400">Members</p>
+                            <p className="text-xl font-bold text-white">{groupData.members.length}/5</p>
+                        </div>
+                    </div>
+                </Card>
+            </motion.div>
 
-          {/* Members Count */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <Card className="p-4 bg-slate-900/50 border-slate-800 hover:bg-slate-900/70 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-500/10 rounded-lg">
-                  <Users className="w-5 h-5 text-purple-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-400">Members</p>
-                  <p className="text-xl font-bold text-white">{groupData.members.length}/5</p>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
+            {/* Votes Cast */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2 }}
+            >
+                <Card className="p-4 bg-slate-900/50 border-slate-800 hover:bg-slate-900/70 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-500/10 rounded-lg">
+                            <Check className="w-5 h-5 text-green-400" />
+                        </div>
+                        <div>
+                            <p className="text-sm text-slate-400">Votes Cast</p>
+                            <p className="text-xl font-bold text-white">3/5</p>
+                        </div>
+                    </div>
+                </Card>
+            </motion.div>
 
-          {/* Votes Cast - Moved up */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <Card className="p-4 bg-slate-900/50 border-slate-800 hover:bg-slate-900/70 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500/10 rounded-lg">
-                  <Check className="w-5 h-5 text-green-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-slate-400">Votes Cast</p>
-                  <p className="text-xl font-bold text-white">3/5</p>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
-
-          {/* Group Code - with integrated share button */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3 }}
-          >
-            <Card className="p-4 bg-slate-900/50 border-slate-800 hover:bg-slate-900/70 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-yellow-500/10 rounded-lg">
-                  <Users className="w-5 h-5 text-yellow-400" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-slate-400">Group Code</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xl font-bold text-white font-mono">{groupData.code}</p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleCopyLink}
-                      className="p-0 hover:bg-transparent"
-                    >
-                      <Share2 className="w-4 h-4 text-slate-400 hover:text-blue-400 transition-colors" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
+            {/* Group Code */}
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+            >
+                <Card className="p-4 bg-slate-900/50 border-slate-800 hover:bg-slate-900/70 transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-yellow-500/10 rounded-lg">
+                            <Users className="w-5 h-5 text-yellow-400" />
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-sm text-slate-400">Group Code</p>
+                            <div className="flex items-center gap-2">
+                                <p className="text-xl font-bold text-white font-mono">{groupData.code}</p>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={handleCopyLink}
+                                    className="p-0 hover:bg-transparent"
+                                >
+                                    <Share2 className="w-4 h-4 text-slate-400 hover:text-blue-400 transition-colors" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+            </motion.div>
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid md:grid-cols-12 gap-8">
+        <div className="grid md:grid-cols-12 gap-8 overflow-hidden">
             {/* Left Column - Voting Section */}
-            <div className="md:col-span-8 space-y-6">
-                {/* Only keep VotingSystem */}
+            <div className="md:col-span-7 space-y-6">
                 <VotingSystem restaurants={restaurants} onRemove={handleRemoveRestaurant} />
             </div>
 
             {/* Right Column - Search and Results */}
-            <div className="md:col-span-4 space-y-4">
+            <div className="md:col-span-5 space-y-4">
                 {/* Location Search */}
                 <Card className="p-4 bg-slate-900/50 border-slate-800">
                     <div className="space-y-4">
@@ -296,7 +269,7 @@ export default function GroupPage() {
                         <h2 className="text-lg font-semibold text-white">
                             Found {searchResults.length} restaurants
                         </h2>
-                        <div className="space-y-4">
+                        <div className="h-[calc(100vh-400px)] overflow-y-auto space-y-4 no-scrollbar">
                             {searchResults.map((restaurant) => (
                                 <RestaurantCard
                                     key={restaurant.id}
