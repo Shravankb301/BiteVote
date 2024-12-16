@@ -1,5 +1,5 @@
 "use client"
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
 import { Trash2 } from 'lucide-react'
 import { Badge } from "@/components/ui/badge"
@@ -24,28 +24,43 @@ interface Restaurant {
   dietary: string[];
   phone?: string;
   votes?: number;
+  votedBy?: string[];
 }
 
 interface VotingSystemProps {
   restaurants: Restaurant[];
-  onRemove: (restaurantId: string) => void;
+  onRemove: (id: string) => void;
+  onVote?: (restaurantId: string) => void;
+  currentUser: string;
 }
 
-export default function VotingSystem({ restaurants, onRemove }: VotingSystemProps) {
+export default function VotingSystem({ restaurants, onRemove, onVote, currentUser }: VotingSystemProps) {
   const [votes, setVotes] = useState<Record<string, number>>({})
   const [showCallDialog, setShowCallDialog] = useState(false);
   const [partySize, setPartySize] = useState('2');
   const [dateTime, setDateTime] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [isCallInProgress, setIsCallInProgress] = useState(false);
+  const [votedRestaurant, setVotedRestaurant] = useState<string | null>(null);
 
   const testPhone = "+12604673696"; // Your test phone number
 
+  useEffect(() => {
+    const initialVotes: Record<string, number> = {};
+    restaurants.forEach(r => {
+      initialVotes[r.id] = r.votes || 0;
+      if (r.votedBy?.includes(currentUser)) {
+        setVotedRestaurant(r.id);
+      }
+    });
+    setVotes(initialVotes);
+  }, [restaurants, currentUser]);
+
   const handleVote = (restaurantId: string) => {
-    setVotes(prev => ({
-      ...prev,
-      [restaurantId]: (prev[restaurantId] || 0) + 1
-    }));
+    const hasVoted = restaurants.some(r => r.votedBy?.includes(currentUser));
+    if (hasVoted) return;
+
+    onVote?.(restaurantId);
   };
 
   const getWinningRestaurant = () => {
@@ -114,12 +129,17 @@ export default function VotingSystem({ restaurants, onRemove }: VotingSystemProp
           <div>
             <h3 className="font-medium text-white">{restaurant.name}</h3>
             <div className="text-sm text-slate-400">
-              Votes: {votes[restaurant.id] || 0}
+              Votes: {restaurant.votes || 0}
+              {restaurant.votedBy?.includes(currentUser) && ' (Voted)'}
             </div>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => handleVote(restaurant.id)}>
-              Vote
+            <Button 
+              onClick={() => handleVote(restaurant.id)}
+              disabled={votedRestaurant !== null}
+              variant={votedRestaurant === restaurant.id ? "secondary" : "default"}
+            >
+              {votedRestaurant === restaurant.id ? 'Voted' : 'Vote'}
             </Button>
             <Button 
               variant="destructive" 

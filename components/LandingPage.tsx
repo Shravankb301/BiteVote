@@ -29,10 +29,13 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
   const handleCreateGroup = () => {
     if (!groupName.trim() || !userName.trim()) return
     const groupCode = nanoid(4)
+    const timestamp = new Date().toISOString()
     const group = {
       name: groupName,
       members: [userName],
-      code: groupCode
+      code: groupCode,
+      restaurants: [],
+      lastUpdated: timestamp
     }
     localStorage.setItem('group', JSON.stringify(group))
     setIsModalOpen(false)

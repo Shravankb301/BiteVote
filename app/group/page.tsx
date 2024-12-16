@@ -19,6 +19,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Toast } from "@/components/ui/toast";
 
 interface Restaurant {
   id: string;
@@ -29,6 +31,8 @@ interface Restaurant {
   dietary: string[];
   image?: string;
   phone?: string;
+  votes?: number;
+  votedBy?: string[];
 }
 
 interface GroupData {
@@ -36,6 +40,7 @@ interface GroupData {
   members: string[];
   code: string;
   restaurants?: Restaurant[];
+  lastUpdated: string;
 }
 
 interface SearchResult {
@@ -58,32 +63,135 @@ export default function GroupPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const sharedCode = searchParams.get('code');
+  const [isClient, setIsClient] = useState(false);
+  const [joinNotification, setJoinNotification] = useState<string>('');
+  const [showNotification, setShowNotification] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   useEffect(() => {
     const data = localStorage.getItem('group')
     if (data) {
-      setGroupData(JSON.parse(data))
+        const parsedData = JSON.parse(data);
+        setGroupData(parsedData);
+        
+        // Initialize session
+        fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: parsedData.code,
+                groupData: parsedData
+            })
+        }).catch(error => console.error('Error initializing session:', error));
     }
-  }, [])
+  }, []);
 
-  const handleCopyLink = () => {
+  useEffect(() => {
+    const joinSharedSession = async () => {
+        if (sharedCode && groupData) {  // Only proceed if we have both code and groupData
+            try {
+                const response = await fetch(`/api/sessions?code=${sharedCode}`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Check if this is a new member
+                    const isNewMember = !data.members.includes(groupData.members[0]);
+                    
+                    if (isNewMember) {
+                        // Add new member to the session
+                        const updatedData = {
+                            ...data,
+                            members: [...data.members, groupData.members[0]]
+                        };
+                        
+                        setGroupData(updatedData);
+                        localStorage.setItem('group', JSON.stringify(updatedData));
+
+                        // Show notification
+                        setJoinNotification(`${groupData.members[0]} joined the session`);
+                        setShowNotification(true);
+                        setTimeout(() => setShowNotification(false), 3000);
+
+                        // Update session with new member
+                        await fetch('/api/sessions', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                code: sharedCode,
+                                groupData: updatedData
+                            })
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Error joining session:', error);
+            }
+        }
+    };
+
+    joinSharedSession();
+  }, [sharedCode, groupData]);
+
+  const handleCopyLink = async () => {
     if (groupData) {
-      navigator.clipboard.writeText(`Join my group "${groupData.name}" with code: ${groupData.code}`)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+        await fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: groupData.code,
+                groupData: {
+                    ...groupData,
+                    restaurants,
+                    lastUpdated: new Date().toISOString()
+                }
+            })
+        });
+
+        const shareUrl = `${window.location.origin}/group?code=${groupData.code}`;
+        navigator.clipboard.writeText(shareUrl);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
     }
   }
 
   const handleRemoveRestaurant = (restaurantId: string) => {
     setRestaurantToDelete(restaurantId)
+    updateSession()
   }
 
-  const confirmRemoveRestaurant = () => {
+  const confirmRemoveRestaurant = async () => {
     if (restaurantToDelete) {
-      setRestaurants(prev => prev.filter(r => r.id !== restaurantToDelete))
-      setRestaurantToDelete(null)
+        const newRestaurants = restaurants.filter(r => r.id !== restaurantToDelete);
+        setRestaurants(newRestaurants);
+        setRestaurantToDelete(null);
+        
+        // Update session after removing restaurant
+        if (groupData) {
+            try {
+                await fetch('/api/sessions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        code: groupData.code,
+                        groupData: {
+                            ...groupData,
+                            restaurants: newRestaurants,
+                            lastUpdated: new Date().toISOString()
+                        }
+                    })
+                });
+            } catch (error) {
+                console.error('Error updating session:', error);
+            }
+        }
     }
-  }
+  };
 
   const handleLocationSelect = async (location: string | { lat: number; lng: number; query?: string }) => {
     console.log('Location selected:', location);
@@ -123,7 +231,12 @@ export default function GroupPage() {
     }
   };
 
-  const addToVoting = (restaurant: SearchResult) => {
+  const addToVoting = async (restaurant: SearchResult) => {
+    // Only proceed if not already in voting
+    if (restaurants.some(r => r.id === restaurant.id)) {
+        return;
+    }
+
     const newRestaurant: Restaurant = {
         id: restaurant.id,
         name: restaurant.name,
@@ -133,13 +246,140 @@ export default function GroupPage() {
         dietary: restaurant.dietary,
         phone: restaurant.phone,
     };
-    
-    if (!restaurants.some(r => r.id === restaurant.id)) {
-        setRestaurants(prev => [...prev, newRestaurant]);
+
+    // Update local state
+    const updatedRestaurants = [...restaurants, newRestaurant];
+    setRestaurants(updatedRestaurants);
+
+    // Update session
+    if (groupData) {
+        try {
+            const timestamp = new Date().toISOString();
+            await fetch('/api/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    code: groupData.code,
+                    groupData: {
+                        ...groupData,
+                        restaurants: updatedRestaurants,
+                        lastUpdated: timestamp
+                    }
+                })
+            });
+        } catch (error) {
+            console.error('Error updating session:', error);
+        }
     }
   };
 
-  if (!groupData) return null
+  const updateSession = async () => {
+    if (!groupData) return;
+    
+    const timestamp = new Date().toISOString();
+    try {
+        await fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: groupData.code,
+                groupData: {
+                    ...groupData,
+                    restaurants,
+                    lastUpdated: timestamp
+                }
+            })
+        });
+    } catch (error) {
+        console.error('Error updating session:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!groupData?.code) return;
+
+    const syncInterval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/sessions?code=${groupData.code}`);
+            const data = await response.json();
+            
+            if (response.ok && data.lastUpdated && 
+                (!groupData.lastUpdated || new Date(data.lastUpdated) > new Date(groupData.lastUpdated))) {
+                
+                // Check for new members
+                const newMembers = data.members.filter((m: string) => !groupData.members.includes(m));
+                if (newMembers.length > 0) {
+                    setJoinNotification(`${newMembers[0]} joined the session`);
+                    setShowNotification(true);
+                    setTimeout(() => setShowNotification(false), 3000);
+                }
+
+                setGroupData(data);
+                setRestaurants(data.restaurants || []);
+                localStorage.setItem('group', JSON.stringify(data));
+            }
+        } catch (error) {
+            console.error('Error syncing session:', error);
+        }
+    }, 2000);
+
+    return () => clearInterval(syncInterval);
+  }, [groupData?.code]);
+
+  const handleVote = async (restaurantId: string) => {
+    if (!groupData) return;
+
+    // Get current restaurant votes
+    const currentRestaurants = [...restaurants];
+    const voterName = groupData.members[0];
+
+    // Remove any existing votes by this user
+    currentRestaurants.forEach(r => {
+        if (r.votedBy) {
+            r.votedBy = r.votedBy.filter(voter => voter !== voterName);
+            r.votes = (r.votedBy || []).length;
+        }
+    });
+
+    // Add new vote
+    const restaurantToUpdate = currentRestaurants.find(r => r.id === restaurantId);
+    if (restaurantToUpdate) {
+        restaurantToUpdate.votedBy = [...(restaurantToUpdate.votedBy || []), voterName];
+        restaurantToUpdate.votes = restaurantToUpdate.votedBy.length;
+    }
+
+    setRestaurants(currentRestaurants);
+
+    // Update session with new votes
+    try {
+        const timestamp = new Date().toISOString();
+        await fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: groupData.code,
+                groupData: {
+                    ...groupData,
+                    restaurants: currentRestaurants,
+                    lastUpdated: timestamp
+                }
+            })
+        });
+    } catch (error) {
+        console.error('Error updating votes:', error);
+    }
+  };
+
+  // Add this function to calculate total voters
+  const getTotalVoters = () => {
+    const allVoters = new Set();
+    restaurants.forEach(r => {
+        r.votedBy?.forEach(voter => allVoters.add(voter));
+    });
+    return allVoters.size;
+  };
+
+  if (!isClient || !groupData) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950 page-no-scroll">
@@ -178,7 +418,9 @@ export default function GroupPage() {
                         </div>
                         <div>
                             <p className="text-sm text-slate-400">Members</p>
-                            <p className="text-xl font-bold text-white">{groupData.members.length}/5</p>
+                            <p className="text-xl font-bold text-white">
+                                {groupData.members.length}/5
+                            </p>
                         </div>
                     </div>
                 </Card>
@@ -222,9 +464,21 @@ export default function GroupPage() {
                                     variant="ghost"
                                     size="sm"
                                     onClick={handleCopyLink}
-                                    className="p-0 hover:bg-transparent"
+                                    className="p-0 hover:bg-transparent relative"
                                 >
-                                    <Share2 className="w-4 h-4 text-slate-400 hover:text-blue-400 transition-colors" />
+                                    <Share2 className={`w-4 h-4 transition-colors ${
+                                        copied ? 'text-green-400' : 'text-slate-400 hover:text-blue-400'
+                                    }`} />
+                                    {copied && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 text-xs text-green-400"
+                                        >
+                                            Link copied!
+                                        </motion.div>
+                                    )}
                                 </Button>
                             </div>
                         </div>
@@ -237,7 +491,12 @@ export default function GroupPage() {
         <div className="grid md:grid-cols-12 gap-8 overflow-hidden">
             {/* Left Column - Voting Section */}
             <div className="md:col-span-7 space-y-6">
-                <VotingSystem restaurants={restaurants} onRemove={handleRemoveRestaurant} />
+                <VotingSystem 
+                  restaurants={restaurants} 
+                  onRemove={handleRemoveRestaurant}
+                  onVote={handleVote}
+                  currentUser={groupData.members[0]}
+                />
             </div>
 
             {/* Right Column - Search and Results */}
@@ -325,6 +584,11 @@ export default function GroupPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Toast 
+        message={joinNotification}
+        isVisible={showNotification}
+      />
     </div>
   )
 }
