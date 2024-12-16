@@ -16,10 +16,10 @@ interface Restaurant {
 
 interface VotingSystemProps {
   restaurants: Restaurant[];
-  onRemoveRestaurant: (id: string) => void;
+  onRemove: (restaurantId: string) => void;
 }
 
-export default function VotingSystem({ restaurants, onRemoveRestaurant }: VotingSystemProps) {
+export default function VotingSystem({ restaurants, onRemove }: VotingSystemProps) {
   const [votes, setVotes] = useState<Record<string, number>>({})
 
   return (
@@ -46,7 +46,7 @@ export default function VotingSystem({ restaurants, onRemoveRestaurant }: Voting
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => onRemoveRestaurant(restaurant.id)}
+                  onClick={() => onRemove(restaurant.id)}
                   className="opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-400 transition-all"
                 >
                   <Trash2 className="h-4 w-4" />

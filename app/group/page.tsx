@@ -5,7 +5,6 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Users, Share2, Clock, ChevronRight, Crown, Filter, Search, Loader2, Check, Copy, Trash2 } from 'lucide-react'
-import RestaurantList from '@/components/RestaurantList'
 import VotingSystem from '@/components/VotingSystem'
 import {
   Select,
@@ -28,6 +27,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { LocationInput } from "@/components/location-input";
+import { RestaurantCard } from "@/components/RestaurantCard";
 
 interface Restaurant {
   id: string;
@@ -61,6 +62,8 @@ interface SearchResult {
   dietary: string[];
   address?: string;
   image?: string;
+  distance: number;
+  vicinity: string;
 }
 
 const NATURAL_LANGUAGE_MAPPINGS = {
@@ -104,32 +107,7 @@ const SEARCH_SUGGESTIONS = [
 export default function GroupPage() {
   const [groupData, setGroupData] = useState<GroupData | null>(null)
   const [copied, setCopied] = useState(false)
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([
-    {
-      id: '1',
-      name: 'Pizza Palace',
-      cuisine: 'Italian',
-      rating: 4.5,
-      priceRange: '$$',
-      dietary: ['vegetarian', 'gluten-free'],
-    },
-    {
-      id: '2',
-      name: 'Sushi Wave',
-      cuisine: 'Japanese',
-      rating: 4.8,
-      priceRange: '$$$',
-      dietary: ['gluten-free', 'halal'],
-    },
-    {
-      id: '3',
-      name: 'Burger Joint',
-      cuisine: 'American',
-      rating: 4.2,
-      priceRange: '$',
-      dietary: ['vegetarian', 'vegan'],
-    },
-  ])
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([])
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState<Filters>({
     cuisine: 'all',
@@ -141,6 +119,7 @@ export default function GroupPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searchSuggestion, setSearchSuggestion] = useState('')
   const [restaurantToDelete, setRestaurantToDelete] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const cuisineTypes = ['All', 'Italian', 'Japanese', 'American', 'Mexican', 'Chinese', 'Indian', 'Thai']
   const dietaryOptions = [
@@ -179,49 +158,50 @@ export default function GroupPage() {
     return Array.from(searchTerms)
   }
 
-  const searchRestaurants = async (query: string) => {
-    setIsSearching(true)
+  const searchRestaurants = async (query: string, coordinates?: { lat: number; lng: number }) => {
+    setIsSearching(true);
+    setSearchResults([]);
+    setError(null);
+    
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      const searchTerms = processNaturalLanguageQuery(query)
-      
-      // Mock results with enhanced matching
-      const results: SearchResult[] = [
-        {
-          id: 'mock1',
-          name: 'Pizza Express',
-          cuisine: 'Italian',
-          rating: 4.5,
-          priceRange: '$$',
-          dietary: ['vegetarian'],
-          address: '123 Main St',
-          tags: ['comfort food', 'casual', 'dinner']
-        },
-        {
-          id: 'mock2',
-          name: 'Sushi Bar',
-          cuisine: 'Japanese',
-          rating: 4.8,
-          priceRange: '$$$',
-          dietary: ['gluten-free'],
-          address: '456 Oak Ave',
-          tags: ['fancy', 'date', 'dinner']
-        },
-        // Add more mock restaurants...
-      ].filter(r => 
-        searchTerms.some(term => 
-          r.name.toLowerCase().includes(term) ||
-          r.cuisine.toLowerCase().includes(term) ||
-          r.tags.some(tag => tag.includes(term))
-        )
-      )
-      
-      setSearchResults(results)
+        const searchParams = new URLSearchParams();
+        
+        if (coordinates) {
+            console.log('Searching with coordinates:', coordinates);
+            searchParams.append('lat', coordinates.lat.toString());
+            searchParams.append('lng', coordinates.lng.toString());
+        } else if (query) {
+            console.log('Searching with location query:', query);
+            searchParams.append('location', query);
+        } else {
+            throw new Error('No location provided');
+        }
+        
+        // Add radius and cuisine if needed
+        searchParams.append('radius', '5000');
+        if (query && coordinates) {
+            searchParams.append('cuisine', query);
+        }
+        
+        console.log('Making API request with params:', searchParams.toString());
+        
+        const response = await fetch(`/api/restaurants?${searchParams}`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to fetch restaurants');
+        }
+        
+        console.log('Search results:', data);
+        setSearchResults(data);
+    } catch (error) {
+        console.error('Error searching restaurants:', error);
+        setError(error instanceof Error ? error.message : 'Failed to fetch restaurants');
+        setSearchResults([]);
     } finally {
-      setIsSearching(false)
+        setIsSearching(false);
     }
-  }
+  };
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -261,6 +241,56 @@ export default function GroupPage() {
     }
   }
 
+  const handleLocationSelect = async (location: string | { lat: number; lng: number; query?: string }) => {
+    console.log('Location selected:', location);
+    if (typeof location === 'string') {
+        setError("Please use the location detection feature");
+        return;
+    }
+
+    const searchParams = new URLSearchParams({
+        lat: location.lat.toString(),
+        lng: location.lng.toString(),
+    });
+
+    if (location.query) {
+        searchParams.append('cuisine', location.query);
+    }
+
+    searchParams.append('radius', '5000');
+    
+    try {
+        const response = await fetch(`/api/restaurants?${searchParams}`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to fetch restaurants');
+        }
+        
+        setSearchResults(data);
+    } catch (error) {
+        console.error('Error searching restaurants:', error);
+        setError(error instanceof Error ? error.message : 'Failed to fetch restaurants');
+    }
+  };
+
+  const addToVoting = (restaurant: SearchResult) => {
+    // Convert SearchResult to Restaurant format
+    const newRestaurant: Restaurant = {
+        id: restaurant.id,
+        name: restaurant.name,
+        cuisine: restaurant.cuisine,
+        rating: restaurant.rating,
+        priceRange: restaurant.priceRange,
+        dietary: restaurant.dietary,
+    };
+    
+    // Check if restaurant already exists in voting
+    if (!restaurants.some(r => r.id === restaurant.id)) {
+        setRestaurants(prev => [...prev, newRestaurant]);
+    }
+  };
+
   if (!groupData) return null
 
   return (
@@ -284,6 +314,12 @@ export default function GroupPage() {
       </div>
 
       <div className="container mx-auto px-4 py-8">
+        <LocationInput onLocationSelect={handleLocationSelect} />
+        {error && (
+            <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <p className="text-red-500">{error}</p>
+            </div>
+        )}
         {/* Top Stats Row */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           {/* Time Card */}
@@ -377,321 +413,58 @@ export default function GroupPage() {
 
         {/* Main Content Grid */}
         <div className="grid md:grid-cols-12 gap-8">
-          {/* Left Column - Voting Section */}
-          <div className="md:col-span-8 space-y-6">
-            {/* Search and Filters Row */}
-            <div className="grid md:grid-cols-2 gap-4">
-              {/* Search Box */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <Card className="p-4 bg-slate-900/50 border-slate-800">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
-                    <Input
-                      placeholder="What do you want to eat?"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10 bg-slate-900/30 border-slate-700/50 text-white 
-                                 focus:border-blue-500/50 focus:ring-purple-500/20 transition-all duration-300
-                                 hover:bg-slate-900/50"
-                    />
-                  </div>
-                </Card>
-              </motion.div>
-
-              {/* Quick Filters */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-              >
-                <Card className="p-4 bg-slate-900/50 border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <Select
-                      value={filters.cuisine}
-                      onValueChange={(value) => setFilters(prev => ({ ...prev, cuisine: value }))}
-                    >
-                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
-                        <SelectValue placeholder="Cuisine" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-700">
-                        {cuisineTypes.map((type) => (
-                          <SelectItem 
-                            key={type.toLowerCase()} 
-                            value={type.toLowerCase()}
-                            className="text-white hover:bg-slate-700"
-                          >
-                            {type}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setShowFilters(!showFilters)}
-                      className={`border-slate-700/50 hover:border-blue-500/50 transition-all duration-300
-                                  ${showFilters ? 'bg-gradient-to-r from-blue-500/10 via-purple-500/10 to-indigo-500/10 text-blue-400' : ''}`}
-                    >
-                      <Filter className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </Card>
-              </motion.div>
+            {/* Left Column - Voting Section */}
+            <div className="md:col-span-8 space-y-6">
+                {/* Only keep VotingSystem */}
+                <VotingSystem restaurants={filteredRestaurants} onRemove={handleRemoveRestaurant} />
             </div>
 
-            {/* Advanced Filters Panel */}
-            <AnimatePresence>
-              {showFilters && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className="p-6 bg-slate-900/50 border-slate-800">
-                    <div className="flex items-center justify-between mb-6">
-                      <h2 className="text-lg font-semibold text-white">Advanced Filters</h2>
-                      <Badge variant="outline" className="text-slate-400">
-                        {filteredRestaurants.length} results
-                      </Badge>
-                    </div>
-
-                    <div className="grid md:grid-cols-3 gap-6">
-                      {/* Dietary Preferences */}
-                      <div className="space-y-2">
-                        <Label className="text-white">Dietary Preferences</Label>
-                        <Select
-                          value={filters.dietary}
-                          onValueChange={(value) => setFilters(prev => ({ ...prev, dietary: value }))}
-                        >
-                          <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
-                            <SelectValue placeholder="Select dietary" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-slate-800 border-slate-700">
-                            {dietaryOptions.map((option) => (
-                              <SelectItem 
-                                key={option.toLowerCase()} 
-                                value={option.toLowerCase()}
-                                className="text-white hover:bg-slate-700 flex items-center gap-2"
-                              >
-                                {option} {' '}
-                                {option === 'All' && '🍽️'}
-                                {option === 'Vegetarian' && '🥗'}
-                                {option === 'Vegan' && '🌱'}
-                                {option === 'Gluten-Free' && '🌾'}
-                                {option === 'Halal' && '🥩'}
-                                {option === 'Kosher' && '✡️'}
-                                {option === 'Dairy-Free' && '🥛'}
-                                {option === 'Nut-Free' && '🥜'}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Rating Filter */}
-                      <div className="space-y-4">
-                        <div className="flex justify-between">
-                          <Label className="text-white">Minimum Rating</Label>
-                          <span className="text-sm text-slate-400">{filters.minRating} ⭐</span>
-                        </div>
-                        <Slider
-                          value={[filters.minRating]}
-                          onValueChange={([value]) => setFilters(prev => ({ ...prev, minRating: value }))}
-                          max={5}
-                          step={0.5}
-                          className="py-4"
+            {/* Right Column - Search and Results */}
+            <div className="md:col-span-4 space-y-4">
+                {/* Location Search */}
+                <Card className="p-4 bg-slate-900/50 border-slate-800">
+                    <div className="space-y-4">
+                        <LocationInput 
+                            onLocationSelect={handleLocationSelect}
+                            className="w-full"
+                            autoDetectOnMount={true}
                         />
-                      </div>
-
-                      {/* Reset Button */}
-                      <div className="flex items-end">
-                        <Button
-                          variant="outline"
-                          className="w-full border-slate-700 hover:border-blue-500/50 transition-colors"
-                          onClick={() => setFilters({ cuisine: 'all', dietary: 'all', minRating: 0 })}
-                        >
-                          Reset Filters
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Voting Section */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <Card className="p-6 bg-slate-900/30 border-slate-800/50 hover:bg-slate-900/50 transition-all duration-300">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500">
-                    Cast Your Vote
-                  </h2>
-                  <Badge className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 text-blue-400 border-blue-500/20">
-                    Voting Open
-                  </Badge>
-                </div>
-                <VotingSystem 
-                  restaurants={filteredRestaurants} 
-                  onRemoveRestaurant={handleRemoveRestaurant}
-                />
-              </Card>
-            </motion.div>
-
-            {/* Members List */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
-              <Card className="p-6 bg-slate-900/50 border-slate-800">
-                <h2 className="text-lg font-semibold text-white mb-4">Group Members</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {groupData.members.map((member, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-2 p-2 rounded-lg bg-slate-800/50"
-                    >
-                      {index === 0 ? (
-                        <Crown className="w-4 h-4 text-yellow-500" />
-                      ) : (
-                        <div className="w-4 h-4" />
-                      )}
-                      <span className="text-slate-300">{member}</span>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </motion.div>
-          </div>
-
-          {/* Right Column - Search Results */}
-          <div className="md:col-span-4 space-y-6">
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <Card className="p-6 bg-slate-900/50 border-slate-800">
-                <div className="space-y-6">
-                  {/* Search Suggestions */}
-                  {!searchQuery && (
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-medium text-slate-400">Popular Searches</h3>
-                      <div className="flex flex-wrap gap-2">
-                        {SEARCH_SUGGESTIONS.map((suggestion, index) => (
-                          <motion.button
-                            key={index}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.1 }}
-                            className="px-3 py-1.5 text-sm bg-slate-800/50 hover:bg-slate-800 
-                                   text-slate-400 hover:text-white rounded-full transition-colors
-                                   border border-slate-700 hover:border-slate-600"
-                            onClick={() => setSearchQuery(suggestion)}
-                          >
-                            {suggestion}
-                          </motion.button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Search Results */}
-                  {searchQuery && (
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-medium text-slate-400">
-                          Search Results
-                        </h3>
-                        {!isSearching && (
-                          <Badge variant="outline" className="text-slate-400">
-                            {searchResults.length} found
-                          </Badge>
+                        
+                        {error && (
+                            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                <p className="text-red-500">{error}</p>
+                            </div>
                         )}
-                      </div>
-
-                      {isSearching ? (
-                        <div className="flex flex-col items-center justify-center py-8 space-y-2">
-                          <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
-                          <p className="text-slate-400 text-sm">Finding the perfect spot...</p>
-                        </div>
-                      ) : searchResults.length === 0 ? (
-                        <div className="text-center py-8 space-y-2">
-                          <p className="text-slate-400">No restaurants found</p>
-                          <p className="text-sm text-slate-500">Try different keywords or browse suggestions</p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {searchResults.map((result) => (
-                            <motion.div
-                              key={result.id}
-                              initial={{ opacity: 0, y: 5 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="p-4 rounded-lg bg-slate-900/30 hover:bg-gradient-to-r 
-                                       hover:from-slate-900/80 hover:via-indigo-900/50 hover:to-slate-900/80 
-                                       cursor-pointer transition-all duration-300 group border border-transparent 
-                                       hover:border-blue-500/20"
-                              onClick={() => {
-                                setRestaurants(prev => [...prev, result])
-                                setSearchQuery('')
-                                setSearchResults([])
-                              }}
-                            >
-                              <div className="flex justify-between items-start">
-                                <div className="space-y-1">
-                                  <h3 className="font-medium text-white group-hover:text-blue-400 transition-colors">
-                                    {result.name}
-                                  </h3>
-                                  <div className="flex items-center gap-2 text-sm text-slate-400">
-                                    <span>{result.cuisine}</span>
-                                    <span>•</span>
-                                    <span>{result.priceRange}</span>
-                                    <span>•</span>
-                                    <span className="text-yellow-400">
-                                      {'⭐'.repeat(Math.floor(result.rating))}
-                                    </span>
-                                  </div>
-                                  <div className="flex flex-wrap gap-2 mt-2">
-                                    {result.dietary.map((diet, index) => (
-                                      <Badge 
-                                        key={index}
-                                        variant="secondary" 
-                                        className="text-xs bg-slate-700/50"
-                                      >
-                                        {diet}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                  <p className="text-sm text-slate-500 mt-1">{result.address}</p>
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="opacity-0 group-hover:opacity-100 hover:bg-blue-500/10 
-                                           hover:text-blue-400 transition-all duration-200"
-                                >
-                                  Add
-                                </Button>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </div>
-                      )}
                     </div>
-                  )}
-                </div>
-              </Card>
-            </motion.div>
-          </div>
+                </Card>
+
+                {/* Search Results */}
+                {isSearching ? (
+                    <div className="flex items-center justify-center p-8">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                    </div>
+                ) : searchResults.length > 0 ? (
+                    <div className="space-y-4">
+                        <h2 className="text-lg font-semibold text-white">
+                            Found {searchResults.length} restaurants
+                        </h2>
+                        <div className="space-y-4">
+                            {searchResults.map((restaurant) => (
+                                <RestaurantCard
+                                    key={restaurant.id}
+                                    name={restaurant.name}
+                                    cuisine={restaurant.cuisine}
+                                    rating={restaurant.rating}
+                                    priceRange={restaurant.priceRange}
+                                    distance={restaurant.distance}
+                                    vicinity={restaurant.vicinity}
+                                    onAddToVoting={() => addToVoting(restaurant)}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                ) : null}
+            </div>
         </div>
       </div>
 
