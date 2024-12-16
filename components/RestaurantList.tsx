@@ -13,10 +13,9 @@ interface Restaurant {
 
 interface RestaurantListProps {
   restaurants: Restaurant[];
-  onRemove: (restaurantId: string) => void;
 }
 
-export default function RestaurantList({ restaurants, onRemove }: RestaurantListProps) {
+export default function RestaurantList({ restaurants }: RestaurantListProps) {
   const getDietaryIcon = (type: string) => {
     switch (type) {
       case 'vegetarian': return '🥗'

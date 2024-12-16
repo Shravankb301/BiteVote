@@ -4,19 +4,11 @@ import { useEffect, useState } from 'react'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Users, Share2, Clock, ChevronRight, Crown, Filter, Search, Loader2, Check, Copy, Trash2 } from 'lucide-react'
+import { Users, Share2, Clock, Loader2, Check } from 'lucide-react'
 import VotingSystem from '@/components/VotingSystem'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Slider } from "@/components/ui/slider"
+import { LocationInput } from "@/components/location-input";
+import { RestaurantCard } from "@/components/RestaurantCard";
 import { motion, AnimatePresence } from 'framer-motion'
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,8 +19,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { LocationInput } from "@/components/location-input";
-import { RestaurantCard } from "@/components/RestaurantCard";
 
 interface Restaurant {
   id: string;
@@ -47,12 +37,6 @@ interface GroupData {
   restaurants?: Restaurant[];
 }
 
-interface Filters {
-  cuisine: string;
-  dietary: string;
-  minRating: number;
-}
-
 interface SearchResult {
   id: string;
   name: string;
@@ -60,160 +44,18 @@ interface SearchResult {
   rating: number;
   priceRange: string;
   dietary: string[];
-  address?: string;
-  image?: string;
   distance: number;
   vicinity: string;
 }
-
-const NATURAL_LANGUAGE_MAPPINGS = {
-  // Meal types
-  'breakfast': ['cafe', 'brunch', 'breakfast', 'coffee', 'bakery'],
-  'lunch': ['quick bite', 'casual', 'lunch', 'sandwich', 'salad'],
-  'dinner': ['restaurant', 'dining', 'dinner', 'bistro'],
-  
-  // Cuisines with common phrases
-  'italian': ['pizza', 'pasta', 'italian'],
-  'japanese': ['sushi', 'ramen', 'japanese'],
-  'chinese': ['dim sum', 'noodles', 'chinese'],
-  'mexican': ['tacos', 'burritos', 'mexican'],
-  'indian': ['curry', 'tandoori', 'indian'],
-  
-  // Moods/Vibes
-  'date night': ['romantic', 'intimate', 'fine dining', 'cozy'],
-  'casual': ['relaxed', 'cafe', 'chill', 'informal'],
-  'fancy': ['upscale', 'elegant', 'fine dining', 'luxury'],
-  
-  // Feelings/Cravings
-  'spicy': ['indian', 'thai', 'mexican', 'hot'],
-  'healthy': ['salad', 'vegan', 'organic', 'fresh'],
-  'comfort food': ['burger', 'pizza', 'pasta', 'homestyle'],
-  'quick': ['fast food', 'takeout', 'quick service'],
-  
-  // Price points
-  'cheap': ['budget', 'affordable', 'inexpensive', '$'],
-  'expensive': ['high-end', 'fine dining', 'upscale', '$$$'],
-}
-
-const SEARCH_SUGGESTIONS = [
-  "I'm in the mood for something spicy 🌶️",
-  "Need a romantic spot for date night 💝",
-  "Craving comfort food right now 🍕",
-  "Looking for healthy options 🥗",
-  "Quick lunch spots nearby ⚡",
-  "Fancy dinner recommendations 🎩",
-]
 
 export default function GroupPage() {
   const [groupData, setGroupData] = useState<GroupData | null>(null)
   const [copied, setCopied] = useState(false)
   const [restaurants, setRestaurants] = useState<Restaurant[]>([])
-  const [showFilters, setShowFilters] = useState(false)
-  const [filters, setFilters] = useState<Filters>({
-    cuisine: 'all',
-    dietary: 'all',
-    minRating: 0
-  })
-  const [searchQuery, setSearchQuery] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
-  const [searchSuggestion, setSearchSuggestion] = useState('')
   const [restaurantToDelete, setRestaurantToDelete] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  const cuisineTypes = ['All', 'Italian', 'Japanese', 'American', 'Mexican', 'Chinese', 'Indian', 'Thai']
-  const dietaryOptions = [
-    'All',
-    'Vegetarian',
-    'Vegan',
-    'Gluten-Free',
-    'Halal',
-    'Kosher',
-    'Dairy-Free',
-    'Nut-Free'
-  ]
-
-  const filteredRestaurants = restaurants.filter(restaurant => {
-    return (
-      (filters.cuisine === 'all' || restaurant.cuisine.toLowerCase() === filters.cuisine) &&
-      (filters.dietary === 'all' || restaurant.dietary.includes(filters.dietary)) &&
-      restaurant.rating >= filters.minRating
-    )
-  })
-
-  const processNaturalLanguageQuery = (query: string) => {
-    const queryLower = query.toLowerCase()
-    let searchTerms = new Set<string>()
-
-    // Check for direct matches in our mappings
-    Object.entries(NATURAL_LANGUAGE_MAPPINGS).forEach(([key, values]) => {
-      if (queryLower.includes(key)) {
-        values.forEach(value => searchTerms.add(value))
-      }
-    })
-
-    // Add the original query terms
-    queryLower.split(' ').forEach(term => searchTerms.add(term))
-
-    return Array.from(searchTerms)
-  }
-
-  const searchRestaurants = async (query: string, coordinates?: { lat: number; lng: number }) => {
-    setIsSearching(true);
-    setSearchResults([]);
-    setError(null);
-    
-    try {
-        const searchParams = new URLSearchParams();
-        
-        if (coordinates) {
-            console.log('Searching with coordinates:', coordinates);
-            searchParams.append('lat', coordinates.lat.toString());
-            searchParams.append('lng', coordinates.lng.toString());
-        } else if (query) {
-            console.log('Searching with location query:', query);
-            searchParams.append('location', query);
-        } else {
-            throw new Error('No location provided');
-        }
-        
-        // Add radius and cuisine if needed
-        searchParams.append('radius', '5000');
-        if (query && coordinates) {
-            searchParams.append('cuisine', query);
-        }
-        
-        console.log('Making API request with params:', searchParams.toString());
-        
-        const response = await fetch(`/api/restaurants?${searchParams}`);
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to fetch restaurants');
-        }
-        
-        console.log('Search results:', data);
-        setSearchResults(data);
-    } catch (error) {
-        console.error('Error searching restaurants:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch restaurants');
-        setSearchResults([]);
-    } finally {
-        setIsSearching(false);
-    }
-  };
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      if (searchQuery) {
-        searchRestaurants(searchQuery)
-      } else {
-        setSearchResults([])
-      }
-    }, 300)
-
-    return () => clearTimeout(handler)
-  }, [searchQuery])
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [isSearching, setIsSearching] = useState(false)
 
   useEffect(() => {
     const data = localStorage.getItem('group')
@@ -248,6 +90,9 @@ export default function GroupPage() {
         return;
     }
 
+    setIsSearching(true);
+    setError(null);
+
     const searchParams = new URLSearchParams({
         lat: location.lat.toString(),
         lng: location.lng.toString(),
@@ -271,6 +116,8 @@ export default function GroupPage() {
     } catch (error) {
         console.error('Error searching restaurants:', error);
         setError(error instanceof Error ? error.message : 'Failed to fetch restaurants');
+    } finally {
+        setIsSearching(false);
     }
   };
 
@@ -416,7 +263,7 @@ export default function GroupPage() {
             {/* Left Column - Voting Section */}
             <div className="md:col-span-8 space-y-6">
                 {/* Only keep VotingSystem */}
-                <VotingSystem restaurants={filteredRestaurants} onRemove={handleRemoveRestaurant} />
+                <VotingSystem restaurants={restaurants} onRemove={handleRemoveRestaurant} />
             </div>
 
             {/* Right Column - Search and Results */}

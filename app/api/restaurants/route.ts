@@ -1,4 +1,4 @@
-import { Client, PlaceType1, PlaceDetailsRequest, Place } from "@googlemaps/google-maps-services-js";
+import { Client, PlaceDetailsRequest } from "@googlemaps/google-maps-services-js";
 import { NextResponse } from 'next/server';
 
 interface Restaurant {
@@ -52,7 +52,7 @@ const extractDietaryOptions = (types: string[] | undefined): string[] => {
     };
     
     return Object.entries(dietaryTerms)
-        .filter(([_, regex]) => lowerCaseTypes.some(type => regex.test(type)))
+        .filter(([, regex]) => lowerCaseTypes.some(type => regex.test(type)))
         .map(([term]) => term);
 };
 
@@ -138,7 +138,8 @@ export async function GET(request: Request) {
             coordinates: latitude && longitude ? `${latitude},${longitude}` : null,
             cuisine,
             radius,
-            hasApiKey: !!GOOGLE_API_KEY
+            hasApiKey: !!GOOGLE_API_KEY,
+            apiKeyLength: GOOGLE_API_KEY?.length
         });
 
         if (!GOOGLE_API_KEY) {
@@ -209,7 +210,20 @@ export async function GET(request: Request) {
                     formattedAddress: geocodeResponse.data.results[0].formatted_address
                 });
             } catch (error) {
-                console.error('Geocoding error:', error);
+                console.error('Geocoding error:', {
+                    message: error instanceof Error ? error.message : 'Unknown error',
+                    status: (error as { response?: { status?: number } })?.response?.status,
+                    data: (error as { response?: { data?: unknown } })?.response?.data
+                });
+                
+                if ((error as { response?: { status?: number } })?.response?.status === 403) {
+                    return NextResponse.json({
+                        error: "Google API authentication failed",
+                        details: "Please check your API key configuration and ensure it has the necessary permissions",
+                        status: 403
+                    }, { status: 403 });
+                }
+                
                 return NextResponse.json({
                     error: "Failed to geocode location",
                     details: error instanceof Error ? error.message : 'Unknown error',
@@ -328,3 +342,5 @@ function calculateDistance(
 
     return R * c; // Distance in meters
 }
+
+//http://localhost:3000/api/restaurants?location=New%20York&cuisine=italian&radius=100
