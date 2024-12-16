@@ -28,6 +28,7 @@ interface Restaurant {
   priceRange: string;
   dietary: string[];
   image?: string;
+  phone?: string;
 }
 
 interface GroupData {
@@ -46,6 +47,7 @@ interface SearchResult {
   dietary: string[];
   distance: number;
   vicinity: string;
+  phone?: string;
 }
 
 export default function GroupPage() {
@@ -122,7 +124,6 @@ export default function GroupPage() {
   };
 
   const addToVoting = (restaurant: SearchResult) => {
-    // Convert SearchResult to Restaurant format
     const newRestaurant: Restaurant = {
         id: restaurant.id,
         name: restaurant.name,
@@ -130,9 +131,9 @@ export default function GroupPage() {
         rating: restaurant.rating,
         priceRange: restaurant.priceRange,
         dietary: restaurant.dietary,
+        phone: restaurant.phone,
     };
     
-    // Check if restaurant already exists in voting
     if (!restaurants.some(r => r.id === restaurant.id)) {
         setRestaurants(prev => [...prev, newRestaurant]);
     }
@@ -305,6 +306,7 @@ export default function GroupPage() {
                                     priceRange={restaurant.priceRange}
                                     distance={restaurant.distance}
                                     vicinity={restaurant.vicinity}
+                                    phone={restaurant.phone}
                                     onAddToVoting={() => addToVoting(restaurant)}
                                 />
                             ))}

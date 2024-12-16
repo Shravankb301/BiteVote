@@ -281,6 +281,7 @@ export async function GET(request: Request) {
                         id: place.place_id,
                         place_id: place.place_id,
                         ...details,
+                        phone: details.phone,
                         priceRange: '$'.repeat(details.price_level || 1),
                         distance,
                         vicinity: place.vicinity || details.address,
