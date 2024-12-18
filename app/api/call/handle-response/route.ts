@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
 import twilio from 'twilio';
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 const VoiceResponse = twilio.twiml.VoiceResponse;
 
-export async function POST(request: Request) {
+export async function POST() {
     console.log('Handle response called');
     
     try {

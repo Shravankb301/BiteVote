@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import { generateGroupCode } from "@/lib/utils";
 
 interface LandingPageProps {
   onGroupCreated: () => void;
@@ -25,19 +26,19 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [userName, setUserName] = useState('')
+  const [code, setCode] = useState('')
 
   const handleCreateGroup = () => {
     if (!groupName.trim() || !userName.trim()) return
-    const groupCode = nanoid(4)
-    const timestamp = new Date().toISOString()
-    const group = {
+    const code = generateGroupCode();
+    const newGroup = {
       name: groupName,
       members: [userName],
-      code: groupCode,
-      restaurants: [],
-      lastUpdated: timestamp
+      code,
+      lastUpdated: new Date().toISOString()
     }
-    localStorage.setItem('group', JSON.stringify(group))
+    localStorage.setItem('group', JSON.stringify(newGroup))
+    setCode(code)
     setIsModalOpen(false)
     onGroupCreated()
   }
@@ -356,6 +357,11 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
             <DialogTitle className="text-white">Create Your Group</DialogTitle>
             <DialogDescription className="text-slate-400">
               Enter your details to start planning with your group.
+              {code && (
+                <Badge className="mt-2 bg-green-500/10 text-green-500 border-green-500/20">
+                  Your group code: {code}
+                </Badge>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

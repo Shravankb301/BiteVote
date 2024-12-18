@@ -1,13 +1,15 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import twilio from 'twilio';
 import { NextResponse } from 'next/server';
 
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioNumber = process.env.TWILIO_PHONE_NUMBER;
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 const client = twilio(accountSid, authToken);
+
+interface TwilioError extends Error {
+    code?: string;
+}
 
 export async function POST(request: Request) {
     try {
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
         console.error('Call error details:', {
             name: (error as Error).name,
             message: (error as Error).message,
-            code: (error as any).code,
+            code: (error as TwilioError).code,
             stack: (error as Error).stack
         });
 

@@ -1,10 +1,11 @@
-'use client'
+"use client"
 
+import { Suspense } from 'react'
 import { useEffect, useState } from 'react'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Users, Share2, Clock, Loader2, Check } from 'lucide-react'
+import { Users, Share2, Loader2, Check } from 'lucide-react'
 import VotingSystem from '@/components/VotingSystem'
 import { LocationInput } from "@/components/location-input";
 import { RestaurantCard } from "@/components/RestaurantCard";
@@ -19,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Toast } from "@/components/ui/toast";
 
 interface Restaurant {
@@ -55,7 +56,7 @@ interface SearchResult {
   phone?: string;
 }
 
-export default function GroupPage() {
+function GroupContent() {
   const [groupData, setGroupData] = useState<GroupData | null>(null)
   const [copied, setCopied] = useState(false)
   const [restaurants, setRestaurants] = useState<Restaurant[]>([])
@@ -64,7 +65,6 @@ export default function GroupPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const searchParams = useSearchParams();
-  const router = useRouter();
   const sharedCode = searchParams.get('code');
   const [isClient, setIsClient] = useState(false);
   const [joinNotification, setJoinNotification] = useState<string>('');
@@ -72,13 +72,12 @@ export default function GroupPage() {
 
   useEffect(() => {
     setIsClient(true);
-  }, []);
-
-  useEffect(() => {
     const data = localStorage.getItem('group')
     if (data) {
+      try {
         const parsedData = JSON.parse(data);
         setGroupData(parsedData);
+        setRestaurants(parsedData.restaurants || []);
         
         // Initialize session
         fetch('/api/sessions', {
@@ -89,54 +88,57 @@ export default function GroupPage() {
                 groupData: parsedData
             })
         }).catch(error => console.error('Error initializing session:', error));
+      } catch (error) {
+        console.error('Error parsing group data:', error);
+      }
     }
   }, []);
 
   useEffect(() => {
+    if (!isClient || !sharedCode || !groupData) return;
+
     const joinSharedSession = async () => {
-        if (sharedCode && groupData) {  // Only proceed if we have both code and groupData
-            try {
-                const response = await fetch(`/api/sessions?code=${sharedCode}`);
-                const data = await response.json();
-                
-                if (response.ok) {
-                    // Check if this is a new member
-                    const isNewMember = !data.members.includes(groupData.members[0]);
-                    
-                    if (isNewMember) {
-                        // Add new member to the session
-                        const updatedData = {
-                            ...data,
-                            members: [...data.members, groupData.members[0]]
-                        };
-                        
-                        setGroupData(updatedData);
-                        localStorage.setItem('group', JSON.stringify(updatedData));
+      try {
+        const response = await fetch(`/api/sessions?code=${sharedCode}`);
+        const data = await response.json();
+        
+        if (response.ok && data && groupData.members?.[0]) {
+          // Check if this is a new member
+          const isNewMember = !data.members?.includes(groupData.members[0]);
+          
+          if (isNewMember) {
+            // Add new member to the session
+            const updatedData = {
+              ...data,
+              members: [...(data.members || []), groupData.members[0]]
+            };
+            
+            setGroupData(updatedData);
+            localStorage.setItem('group', JSON.stringify(updatedData));
 
-                        // Show notification
-                        setJoinNotification(`${groupData.members[0]} joined the session`);
-                        setShowNotification(true);
-                        setTimeout(() => setShowNotification(false), 3000);
+            // Show notification
+            setJoinNotification(`${groupData.members[0]} joined the session`);
+            setShowNotification(true);
+            setTimeout(() => setShowNotification(false), 3000);
 
-                        // Update session with new member
-                        await fetch('/api/sessions', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                code: sharedCode,
-                                groupData: updatedData
-                            })
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error('Error joining session:', error);
-            }
+            // Update session with new member
+            await fetch('/api/sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                code: sharedCode,
+                groupData: updatedData
+              })
+            });
+          }
         }
+      } catch (error) {
+        console.error('Error joining session:', error);
+      }
     };
 
     joinSharedSession();
-  }, [sharedCode, groupData]);
+  }, [sharedCode, groupData, isClient]);
 
   const handleCopyLink = async () => {
     if (groupData) {
@@ -306,17 +308,27 @@ export default function GroupPage() {
             if (response.ok && data.lastUpdated && 
                 (!groupData.lastUpdated || new Date(data.lastUpdated) > new Date(groupData.lastUpdated))) {
                 
-                // Check for new members
-                const newMembers = data.members.filter((m: string) => !groupData.members.includes(m));
+                // Check for new members with null safety
+                const currentMembers = groupData.members || [];
+                const newMembers = (data.members || []).filter((m: string) => !currentMembers.includes(m));
+                
                 if (newMembers.length > 0) {
                     setJoinNotification(`${newMembers[0]} joined the session`);
                     setShowNotification(true);
                     setTimeout(() => setShowNotification(false), 3000);
                 }
 
-                setGroupData(data);
-                setRestaurants(data.restaurants || []);
-                localStorage.setItem('group', JSON.stringify(data));
+                // Ensure data has required properties with defaults
+                const updatedData = {
+                    ...data,
+                    members: data.members || [],
+                    restaurants: data.restaurants || [],
+                    lastUpdated: data.lastUpdated
+                };
+
+                setGroupData(updatedData);
+                setRestaurants(updatedData.restaurants);
+                localStorage.setItem('group', JSON.stringify(updatedData));
             }
         } catch (error) {
             console.error('Error syncing session:', error);
@@ -324,7 +336,7 @@ export default function GroupPage() {
     }, 2000);
 
     return () => clearInterval(syncInterval);
-  }, [groupData?.code]);
+  }, [groupData?.code, groupData?.lastUpdated, groupData?.members]);
 
   const handleVote = async (restaurantId: string) => {
     if (!groupData) return;
@@ -370,16 +382,17 @@ export default function GroupPage() {
     }
   };
 
-  // Add this function to calculate total voters
-  const getTotalVoters = () => {
-    const allVoters = new Set();
-    restaurants.forEach(r => {
-        r.votedBy?.forEach(voter => allVoters.add(voter));
-    });
-    return allVoters.size;
-  };
+  if (!isClient) {
+    return null; // Return null on server-side and during hydration
+  }
 
-  if (!isClient || !groupData) return null;
+  if (!groupData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950 page-no-scroll">
@@ -496,6 +509,7 @@ export default function GroupPage() {
                   onRemove={handleRemoveRestaurant}
                   onVote={handleVote}
                   currentUser={groupData.members[0]}
+                  sessionId={groupData.code}
                 />
             </div>
 
@@ -590,6 +604,14 @@ export default function GroupPage() {
         isVisible={showNotification}
       />
     </div>
+  )
+}
+
+export default function GroupPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <GroupContent />
+    </Suspense>
   )
 }
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from 'react';
-import { Star, Plus, Phone } from "lucide-react";
+import { Star, Plus } from "lucide-react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import {
@@ -40,8 +40,6 @@ export function RestaurantCard({
     const [dateTime, setDateTime] = useState('');
     const [customerName, setCustomerName] = useState('');
     const [isCallInProgress, setIsCallInProgress] = useState(false);
-
-    const testPhone = "+12604673696"; // Replace with your actual phone number
 
     const handleMakeReservation = async () => {
         if (!phone) return;
@@ -113,7 +111,7 @@ export function RestaurantCard({
                     <DialogHeader>
                         <DialogTitle>Make a Reservation at {name}</DialogTitle>
                         <DialogDescription>
-                            Fill in the details and we'll call the restaurant for you.
+                            Fill in the details and we&apos;ll call the restaurant for you.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
