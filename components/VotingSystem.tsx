@@ -44,12 +44,12 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
   const [isClient, setIsClient] = useState(false);
   const [votes, setVotes] = useState<Record<string, number>>({});
   const [votedRestaurants, setVotedRestaurants] = useState<Record<string, string[]>>({});
+  const [hasUserVoted, setHasUserVoted] = useState<boolean>(false);
   const [showCallDialog, setShowCallDialog] = useState(false);
   const [partySize, setPartySize] = useState('2');
   const [dateTime, setDateTime] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [isCallInProgress, setIsCallInProgress] = useState(false);
-  const [hasUserVoted, setHasUserVoted] = useState(false);
 
   const testPhone = "+12604673696";
 
@@ -64,17 +64,21 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
 
     const initialVotes: Record<string, number> = {};
     const initialVotedRestaurants: Record<string, string[]> = {};
+    
     restaurants.forEach(r => {
-      initialVotes[r.id] = r.votes || 0;
-      initialVotedRestaurants[r.id] = r.votedBy || [];
-      // Check if user has voted for any restaurant
-      if (r.votedBy?.includes(currentUser)) {
-        setHasUserVoted(true);
-      }
+      // Ensure votedBy is always an array
+      const votedBy = r.votedBy || [];
+      initialVotes[r.id] = votedBy.length;
+      initialVotedRestaurants[r.id] = votedBy;
     });
+    
+    // Check if the current user has already voted
+    const userHasVoted = restaurants.some(r => r.votedBy?.includes(currentUser));
+    setHasUserVoted(userHasVoted);
+    
     setVotes(initialVotes);
     setVotedRestaurants(initialVotedRestaurants);
-  }, [restaurants, currentUser, isClient]);
+  }, [restaurants, isClient, currentUser]);
 
   // Subscribe to vote updates
   useEffect(() => {
@@ -91,6 +95,11 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
         ...prevVoted,
         [data.restaurantId]: data.votedBy || []
       }));
+  
+      // Update hasUserVoted when vote updates
+      if (data.votedBy.includes(currentUser)) {
+        setHasUserVoted(true);
+      }
     });
 
     return () => {
@@ -120,14 +129,14 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
         throw new Error(data.error || 'Failed to vote');
       }
 
-      setHasUserVoted(true);
+      // Update local state with the server response
       setVotes(prev => ({
         ...prev,
-        [restaurantId]: data.votes || 0
+        [restaurantId]: data.votes
       }));
       setVotedRestaurants(prev => ({
         ...prev,
-        [restaurantId]: data.votedBy || []
+        [restaurantId]: data.votedBy
       }));
 
       if (onVote) {
@@ -162,6 +171,11 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
     const winner = getWinningRestaurant();
     if (!winner) return;
     
+    if (!winner.phone && !testPhone) {
+      alert('No valid phone number available for this restaurant');
+      return;
+    }
+    
     setIsCallInProgress(true);
     try {
       const response = await fetch('/api/call', {
@@ -170,7 +184,7 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          restaurantPhone: testPhone,
+          restaurantPhone: winner.phone || testPhone,
           partySize,
           dateTime,
           name: customerName
@@ -191,7 +205,6 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
   };
 
   const winner = getWinningRestaurant();
-  const hasVotes = Object.values(votes).some(v => v > 0);
 
   // Return a loading state during server-side rendering
   if (!isClient) {
@@ -222,19 +235,20 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-white">Vote for Restaurants</h2>
-        {hasUserVoted && hasVotes && winner?.phone && (
+        {winner?.phone && (
           <Button
             onClick={() => setShowCallDialog(true)}
             className="bg-green-500 hover:bg-green-600"
+            disabled={isCallInProgress}
           >
             <Phone className="w-4 h-4 mr-2" />
-            Call Winner
+            {isCallInProgress ? 'Calling...' : 'Call Winner'}
           </Button>
         )}
       </div>
 
       {restaurants.map((restaurant) => {
-        const hasVoted = votedRestaurants[restaurant.id]?.includes(currentUser);
+        const hasVotedForThis = votedRestaurants[restaurant.id]?.includes(currentUser);
         const totalVotes = getTotalVotes(restaurant.id);
         const voters = getVoterNames(restaurant.id);
         const isWinner = winner?.id === restaurant.id && totalVotes > 0;
@@ -243,7 +257,7 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
           <div
             key={restaurant.id}
             className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
-              hasUserVoted && isWinner 
+              isWinner 
                 ? 'bg-green-900/30 hover:bg-green-900/40 border border-green-500/30' 
                 : 'bg-slate-800/50 hover:bg-slate-800'
             }`}
@@ -251,35 +265,31 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <h3 className="font-medium text-white">{restaurant.name}</h3>
-                {hasUserVoted && isWinner && (
+                {isWinner && (
                   <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">
                     Leading
                   </span>
                 )}
               </div>
               <div className="text-sm text-slate-400">
-                {hasUserVoted ? (
-                  <>
-                    <div>Total Votes: {totalVotes}</div>
-                    {voters.length > 0 && (
-                      <div className="text-xs text-slate-500">
-                        Voted by: {voters.join(', ')}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div>Vote to see results</div>
+                <div>Total Votes: {totalVotes}</div>
+                {voters.length > 0 && (
+                  <div className="text-xs text-slate-500">
+                    Voted by: {voters.join(', ')}
+                  </div>
                 )}
               </div>
             </div>
             <div className="flex gap-2">
               <Button 
                 onClick={() => handleVote(restaurant.id)}
-                disabled={hasVoted}
-                variant={hasVoted ? "secondary" : "default"}
-                className={hasVoted ? "opacity-50" : ""}
+                disabled={hasVotedForThis || hasUserVoted}
+                variant={hasVotedForThis ? "secondary" : isWinner ? "default" : "default"}
+                className={`${hasVotedForThis || hasUserVoted ? "opacity-50" : ""} ${
+                  isWinner && !hasVotedForThis && !hasUserVoted ? "bg-green-600 hover:bg-green-700" : ""
+                }`}
               >
-                {hasVoted ? 'Voted' : 'Vote'}
+                {hasVotedForThis ? 'Voted' : hasUserVoted ? 'Already Voted' : isWinner ? 'Vote for Leader' : 'Vote'}
               </Button>
               <Button 
                 variant="destructive" 
@@ -306,6 +316,8 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
               <Input
                 id="partySize"
                 type="number"
+                min="1"
+                max="20"
                 value={partySize}
                 onChange={(e) => setPartySize(e.target.value)}
               />

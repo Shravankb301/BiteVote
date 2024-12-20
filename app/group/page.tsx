@@ -22,6 +22,15 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useSearchParams } from 'next/navigation';
 import { Toast } from "@/components/ui/toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 interface Restaurant {
   id: string;
@@ -69,76 +78,72 @@ function GroupContent() {
   const [isClient, setIsClient] = useState(false);
   const [joinNotification, setJoinNotification] = useState<string>('');
   const [showNotification, setShowNotification] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showNameDialog, setShowNameDialog] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [sessionDataToJoin, setSessionDataToJoin] = useState<GroupData | null>(null);
 
   useEffect(() => {
     setIsClient(true);
-    const data = localStorage.getItem('group')
-    if (data) {
-      try {
-        const parsedData = JSON.parse(data);
-        setGroupData(parsedData);
-        setRestaurants(parsedData.restaurants || []);
-        
-        // Initialize session
-        fetch('/api/sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                code: parsedData.code,
-                groupData: parsedData
-            })
-        }).catch(error => console.error('Error initializing session:', error));
-      } catch (error) {
-        console.error('Error parsing group data:', error);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isClient || !sharedCode || !groupData) return;
-
-    const joinSharedSession = async () => {
-      try {
-        const response = await fetch(`/api/sessions?code=${sharedCode}`);
-        const data = await response.json();
-        
-        if (response.ok && data && groupData.members?.[0]) {
-          // Check if this is a new member
-          const isNewMember = !data.members?.includes(groupData.members[0]);
+    const initializeGroup = async () => {
+      setIsLoading(true);
+      // Check for shared code in URL
+      const sharedCode = searchParams.get('code');
+      
+      // If there's a shared code, try to fetch the session first
+      if (sharedCode) {
+        try {
+          const response = await fetch(`/api/sessions?code=${sharedCode}`);
+          const sessionData = await response.json();
           
-          if (isNewMember) {
-            // Add new member to the session
-            const updatedData = {
-              ...data,
-              members: [...(data.members || []), groupData.members[0]]
-            };
-            
-            setGroupData(updatedData);
-            localStorage.setItem('group', JSON.stringify(updatedData));
-
-            // Show notification
-            setJoinNotification(`${groupData.members[0]} joined the session`);
-            setShowNotification(true);
-            setTimeout(() => setShowNotification(false), 3000);
-
-            // Update session with new member
-            await fetch('/api/sessions', {
+          if (response.ok && sessionData) {
+            // Check if user already has group data
+            const existingData = localStorage.getItem('group');
+            if (!existingData) {
+              // Show name dialog for new user
+              setSessionDataToJoin(sessionData);
+              setShowNameDialog(true);
+              setIsLoading(false);
+              return;
+            }
+            // Initialize with session data
+            setGroupData(sessionData);
+            setRestaurants(sessionData.restaurants || []);
+            localStorage.setItem('group', JSON.stringify(sessionData));
+            setIsLoading(false);
+            return;
+          }
+        } catch (error) {
+          console.error('Error fetching session:', error);
+        }
+      }
+      
+      // If no shared code or session fetch failed, try local storage
+      const data = localStorage.getItem('group')
+      if (data) {
+        try {
+          const parsedData = JSON.parse(data);
+          setGroupData(parsedData);
+          setRestaurants(parsedData.restaurants || []);
+          
+          // Initialize session
+          await fetch('/api/sessions', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                code: sharedCode,
-                groupData: updatedData
+                  code: parsedData.code,
+                  groupData: parsedData
               })
-            });
-          }
+          }).catch(error => console.error('Error initializing session:', error));
+        } catch (error) {
+          console.error('Error parsing group data:', error);
         }
-      } catch (error) {
-        console.error('Error joining session:', error);
       }
+      setIsLoading(false);
     };
 
-    joinSharedSession();
-  }, [sharedCode, groupData, isClient]);
+    initializeGroup();
+  }, [searchParams]);
 
   const handleCopyLink = async () => {
     if (groupData) {
@@ -345,19 +350,19 @@ function GroupContent() {
     const currentRestaurants = [...restaurants];
     const voterName = groupData.members[0];
 
-    // Remove any existing votes by this user
-    currentRestaurants.forEach(r => {
-        if (r.votedBy) {
-            r.votedBy = r.votedBy.filter(voter => voter !== voterName);
-            r.votes = (r.votedBy || []).length;
-        }
-    });
-
-    // Add new vote
+    // Find the restaurant to update
     const restaurantToUpdate = currentRestaurants.find(r => r.id === restaurantId);
     if (restaurantToUpdate) {
-        restaurantToUpdate.votedBy = [...(restaurantToUpdate.votedBy || []), voterName];
-        restaurantToUpdate.votes = restaurantToUpdate.votedBy.length;
+        // Initialize votedBy array if it doesn't exist
+        if (!restaurantToUpdate.votedBy) {
+            restaurantToUpdate.votedBy = [];
+        }
+        
+        // Add new vote if user hasn't voted for this restaurant yet
+        if (!restaurantToUpdate.votedBy.includes(voterName)) {
+            restaurantToUpdate.votedBy.push(voterName);
+            restaurantToUpdate.votes = restaurantToUpdate.votedBy.length;
+        }
     }
 
     setRestaurants(currentRestaurants);
@@ -382,8 +387,47 @@ function GroupContent() {
     }
   };
 
-  if (!isClient) {
-    return null; // Return null on server-side and during hydration
+  const handleJoinGroup = async () => {
+    if (!sessionDataToJoin || !newUserName.trim()) return;
+
+    // Add new member to the session
+    const updatedData = {
+      ...sessionDataToJoin,
+      members: [...(sessionDataToJoin.members || []), newUserName.trim()]
+    };
+    
+    setGroupData(updatedData);
+    // Also set the restaurants to ensure we have the latest state
+    setRestaurants(sessionDataToJoin.restaurants || []);
+    localStorage.setItem('group', JSON.stringify(updatedData));
+    setShowNameDialog(false);
+
+    // Update session with new member
+    try {
+      await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: sessionDataToJoin.code,
+          groupData: updatedData
+        })
+      });
+
+      // Show notification
+      setJoinNotification(`${newUserName.trim()} joined the session`);
+      setShowNotification(true);
+      setTimeout(() => setShowNotification(false), 3000);
+    } catch (error) {
+      console.error('Error updating session:', error);
+    }
+  };
+
+  if (!isClient || isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
   }
 
   if (!groupData) {
@@ -603,6 +647,39 @@ function GroupContent() {
         message={joinNotification}
         isVisible={showNotification}
       />
+
+      {/* Name Dialog */}
+      <Dialog open={showNameDialog} onOpenChange={setShowNameDialog}>
+        <DialogContent className="sm:max-w-[425px] bg-slate-900 border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-white">Join Group</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Enter your name to join the group session.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name" className="text-white">Your Name</Label>
+              <Input
+                id="name"
+                placeholder="Enter your name"
+                value={newUserName}
+                onChange={(e) => setNewUserName(e.target.value)}
+                className="bg-slate-800 border-slate-700 text-white"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              onClick={handleJoinGroup}
+              className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+              disabled={!newUserName.trim()}
+            >
+              Join Group
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
