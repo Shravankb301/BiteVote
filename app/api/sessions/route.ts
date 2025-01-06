@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
+import { MongoClient } from 'mongodb';
 
 // Define interfaces for the data structures
 interface GroupData {
@@ -49,53 +50,66 @@ export async function GET(request: Request) {
         const code = searchParams.get('code');
 
         if (!code) {
-            return NextResponse.json({ error: 'Session code required' }, { status: 400 });
+            return NextResponse.json({ error: 'Code parameter is required' }, { status: 400 });
         }
 
-        const client = await clientPromise;
-        const db = client.db();
-        const session = await db.collection('sessions').findOne({ code });
+        const client = await Promise.race([
+            clientPromise,
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Connection timeout')), 5000)
+            )
+        ]) as MongoClient;
+
+        const db = client.db('team-lunch-decider');
+        const session = await db.collection('sessions')
+            .findOne({ code }, { maxTimeMS: 5000 }); // Set maximum execution time
 
         if (!session) {
             return NextResponse.json({ error: 'Session not found' }, { status: 404 });
         }
 
         return NextResponse.json(session);
-    } catch (e) {
-        console.error('Failed to fetch session:', e);
-        return NextResponse.json({ error: 'Failed to fetch session' }, { status: 500 });
+    } catch (error) {
+        console.error('Sessions API Error:', error);
+        return NextResponse.json(
+            { error: 'Failed to fetch session data' },
+            { status: 500 }
+        );
     }
 }
 
 export async function POST(request: Request) {
     try {
-        const { code, groupData } = await request.json() as { code: string; groupData: GroupData };
+        const body = await request.json();
+        const { code, groupData } = body;
 
         if (!code || !groupData) {
-            return NextResponse.json({ error: 'Missing required data' }, { status: 400 });
+            return NextResponse.json(
+                { error: 'Code and groupData are required' },
+                { status: 400 }
+            );
         }
 
-        const client = await clientPromise;
-        const db = client.db();
+        const client = await Promise.race([
+            clientPromise,
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Connection timeout')), 5000)
+            )
+        ]) as MongoClient;
 
-        // Sanitize the data before saving
-        const sanitizedData = sanitizeData(groupData) as GroupData;
-
-        // Update the session with sanitized data
+        const db = client.db('team-lunch-decider');
         await db.collection('sessions').updateOne(
             { code },
-            { 
-                $set: { 
-                    ...sanitizedData,
-                    lastUpdated: new Date().toISOString() 
-                } 
-            },
-            { upsert: true }
+            { $set: groupData },
+            { upsert: true, maxTimeMS: 5000 }
         );
 
         return NextResponse.json({ success: true });
-    } catch (e) {
-        console.error('Session update error:', e);
-        return NextResponse.json({ error: 'Failed to update session' }, { status: 500 });
+    } catch (error) {
+        console.error('Sessions API Error:', error);
+        return NextResponse.json(
+            { error: 'Failed to update session data' },
+            { status: 500 }
+        );
     }
 } 
