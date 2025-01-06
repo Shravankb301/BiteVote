@@ -82,11 +82,64 @@ function GroupContent() {
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [sessionDataToJoin, setSessionDataToJoin] = useState<GroupData | null>(null);
+  const [testUser] = useState<string | false>(() => {
+    if (typeof window === 'undefined' || !window.location.search.includes('test=true')) {
+      return false;
+    }
+    const urlParams = new URLSearchParams(window.location.search);
+    const userParam = urlParams.get('user');
+    return userParam || `TestUser_${Math.random().toString(36).slice(2, 7)}`;
+  });
 
   useEffect(() => {
     setIsClient(true);
     const initializeGroup = async () => {
       setIsLoading(true);
+      const isTestMode = window.location.search.includes('test=true');
+
+      if (isTestMode) {
+        // Use a fixed code for test mode so all test users share the same session
+        const testGroupData = {
+          name: 'Test Group',
+          members: [],
+          code: 'test_session_123', // Fixed code for test mode
+          restaurants: [],
+          lastUpdated: new Date().toISOString()
+        };
+
+        try {
+          // Try to fetch existing test session
+          const response = await fetch(`/api/sessions?code=test_session_123`);
+          const existingSession = await response.json();
+          
+          if (response.ok && existingSession) {
+            setGroupData(existingSession);
+            setRestaurants(existingSession.restaurants || []);
+          } else {
+            // Create new session if none exists
+            setGroupData(testGroupData);
+            setRestaurants([]);
+            
+            // Initialize the session
+            await fetch('/api/sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                code: testGroupData.code,
+                groupData: testGroupData
+              })
+            });
+          }
+        } catch (error) {
+          console.error('Error with test session:', error);
+          setGroupData(testGroupData);
+          setRestaurants([]);
+        }
+        
+        setIsLoading(false);
+        return;
+      }
+
       // Check for shared code in URL
       const sharedCode = searchParams.get('code');
       
@@ -552,7 +605,7 @@ function GroupContent() {
                   restaurants={restaurants} 
                   onRemove={handleRemoveRestaurant}
                   onVote={handleVote}
-                  currentUser={groupData.members[0]}
+                  currentUser={testUser || groupData.members[0]}
                   sessionId={groupData.code}
                 />
             </div>

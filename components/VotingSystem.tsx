@@ -250,7 +250,6 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
       {restaurants.map((restaurant) => {
         const hasVotedForThis = votedRestaurants[restaurant.id]?.includes(currentUser);
         const totalVotes = getTotalVotes(restaurant.id);
-        const voters = getVoterNames(restaurant.id);
         const isWinner = winner?.id === restaurant.id && totalVotes > 0;
 
         return (
@@ -273,11 +272,6 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
               </div>
               <div className="text-sm text-slate-400">
                 <div>Total Votes: {totalVotes}</div>
-                {voters.length > 0 && (
-                  <div className="text-xs text-slate-500">
-                    Voted by: {voters.join(', ')}
-                  </div>
-                )}
               </div>
             </div>
             <div className="flex gap-2">
