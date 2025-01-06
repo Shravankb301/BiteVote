@@ -98,29 +98,43 @@ function GroupContent() {
       const isTestMode = window.location.search.includes('test=true');
 
       if (isTestMode) {
-        // Use a fixed code for test mode so all test users share the same session
         const testGroupData = {
           name: 'Test Group',
-          members: [],
-          code: 'test_session_123', // Fixed code for test mode
+          members: [testUser as string],
+          code: 'test_session_123',
           restaurants: [],
           lastUpdated: new Date().toISOString()
         };
 
         try {
-          // Try to fetch existing test session
           const response = await fetch(`/api/sessions?code=test_session_123`);
           const existingSession = await response.json();
           
           if (response.ok && existingSession) {
-            setGroupData(existingSession);
+            // Check if user isn't already in members list
+            if (!existingSession.members?.includes(testUser)) {
+              const updatedSession = {
+                ...existingSession,
+                members: [...(existingSession.members || []), testUser as string],
+                lastUpdated: new Date().toISOString()
+              };
+              
+              // Update session with new member
+              await fetch('/api/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  code: 'test_session_123',
+                  groupData: updatedSession
+                })
+              });
+              setGroupData(updatedSession);
+            } else {
+              setGroupData(existingSession);
+            }
             setRestaurants(existingSession.restaurants || []);
           } else {
-            // Create new session if none exists
-            setGroupData(testGroupData);
-            setRestaurants([]);
-            
-            // Initialize the session
+            // Create new session with first member
             await fetch('/api/sessions', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -129,13 +143,14 @@ function GroupContent() {
                 groupData: testGroupData
               })
             });
+            setGroupData(testGroupData);
+            setRestaurants([]);
           }
         } catch (error) {
           console.error('Error with test session:', error);
           setGroupData(testGroupData);
           setRestaurants([]);
         }
-        
         setIsLoading(false);
         return;
       }
@@ -475,6 +490,13 @@ function GroupContent() {
     }
   };
 
+  // Add this function to calculate total votes
+  const getTotalVotes = () => {
+    return restaurants.reduce((total, restaurant) => {
+      return total + (restaurant.votedBy?.length || 0);
+    }, 0);
+  };
+
   if (!isClient || isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950 flex items-center justify-center">
@@ -529,8 +551,11 @@ function GroupContent() {
                         <div>
                             <p className="text-sm text-slate-400">Members</p>
                             <p className="text-xl font-bold text-white">
-                                {groupData.members.length}/5
+                                {groupData.members.length} Active
                             </p>
+                            <div className="text-xs text-slate-500">
+                                {groupData.members.join(', ')}
+                            </div>
                         </div>
                     </div>
                 </Card>
@@ -549,7 +574,9 @@ function GroupContent() {
                         </div>
                         <div>
                             <p className="text-sm text-slate-400">Votes Cast</p>
-                            <p className="text-xl font-bold text-white">3/5</p>
+                            <p className="text-xl font-bold text-white">
+                                {getTotalVotes()} Total
+                            </p>
                         </div>
                     </div>
                 </Card>
