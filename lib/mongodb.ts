@@ -8,13 +8,19 @@ const uri = process.env.MONGODB_URI;
 console.log('Connecting to MongoDB...', { uri: uri.substring(0, 20) + '...' });
 
 const options = {
-  connectTimeoutMS: 10000, // Connection timeout of 10 seconds
-  socketTimeoutMS: 30000,  // Socket timeout of 30 seconds
-  maxPoolSize: 50,         // Maximum number of connections in the pool
-  minPoolSize: 10,         // Minimum number of connections in the pool
-  maxIdleTimeMS: 30000,    // Maximum time a connection can remain idle
-  retryWrites: true,       // Enable retrying write operations
-  retryReads: true         // Enable retrying read operations
+  connectTimeoutMS: 10000,
+  socketTimeoutMS: 30000,
+  maxPoolSize: 50,
+  minPoolSize: 10,
+  maxIdleTimeMS: 30000,
+  retryWrites: true,
+  retryReads: true,
+  ssl: true,
+  tls: true,
+  tlsAllowInvalidCertificates: true, // For development only, remove in production
+  tlsAllowInvalidHostnames: true,    // For development only, remove in production
+  useNewUrlParser: true,
+  useUnifiedTopology: true
 };
 
 let client;
@@ -42,7 +48,15 @@ if (process.env.NODE_ENV === 'development') {
   }
   clientPromise = globalWithMongo.mongo.promise!;
 } else {
-  client = new MongoClient(uri, options);
+  // In production, use more secure TLS options
+  const productionOptions = {
+    ...options,
+    tlsAllowInvalidCertificates: false,
+    tlsAllowInvalidHostnames: false,
+    ssl: true,
+    tls: true,
+  };
+  client = new MongoClient(uri, productionOptions);
   clientPromise = client.connect()
     .catch(err => {
       console.error('Failed to connect to MongoDB:', err);

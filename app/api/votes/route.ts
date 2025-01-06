@@ -48,13 +48,18 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+    console.log('Vote POST request received');
     try {
-        const { restaurantId, sessionId, userId } = await request.json();
+        const body = await request.json();
+        console.log('Request body:', body);
+        const { restaurantId, sessionId, userId } = body;
 
         if (!restaurantId || !sessionId || !userId) {
+            console.error('Missing parameters:', { restaurantId, sessionId, userId });
             return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
         }
 
+        console.log('Connecting to MongoDB...');
         const client = await Promise.race([
             clientPromise,
             new Promise((_, reject) => 
@@ -62,72 +67,65 @@ export async function POST(request: Request) {
             )
         ]) as MongoClient;
 
+        console.log('Connected to MongoDB');
         const db = client.db('team-lunch-decider');
         const votesCollection = db.collection<VoteDocument>('votes');
 
-        // Start a session for transaction
-        const session = client.startSession();
-        let voteCount = 0;
-        let voters: string[] = [];
+        // First, check if user has already voted
+        console.log('Checking for existing vote...');
+        const existingVote = await votesCollection.findOne({
+            restaurantId,
+            sessionId,
+            votedBy: userId
+        }, { maxTimeMS: 5000 });
 
+        if (existingVote) {
+            console.log('User has already voted');
+            return NextResponse.json({ 
+                error: 'User has already voted for this restaurant'
+            }, { status: 400 });
+        }
+
+        // Update vote without transaction for simplicity
+        console.log('Updating vote...');
+        const updateResult = await votesCollection.findOneAndUpdate(
+            { restaurantId, sessionId },
+            { $addToSet: { votedBy: userId } },
+            { 
+                upsert: true,
+                returnDocument: 'after',
+                maxTimeMS: 5000
+            }
+        );
+
+        if (!updateResult?.value) {
+            console.error('Failed to update vote - no value returned');
+            throw new Error('Failed to update vote');
+        }
+
+        const voteCount = updateResult.value.votedBy.length;
+        const voters = updateResult.value.votedBy;
+
+        // Trigger real-time update via Pusher
+        console.log('Triggering Pusher update...');
         try {
-            await session.withTransaction(async () => {
-                // Check if user has already voted
-                const currentVote = await votesCollection.findOne({
-                    restaurantId,
-                    sessionId,
-                    votedBy: userId
-                }, { maxTimeMS: 5000, session });
-
-                if (currentVote) {
-                    throw new Error('User has already voted for this restaurant');
-                }
-
-                // Update or create the vote document
-                const updateResult = await votesCollection.findOneAndUpdate(
-                    { restaurantId, sessionId },
-                    { $addToSet: { votedBy: userId } },
-                    { 
-                        upsert: true,
-                        returnDocument: 'after',
-                        maxTimeMS: 5000,
-                        session
-                    }
-                );
-
-                if (!updateResult?.value) {
-                    throw new Error('Failed to update vote');
-                }
-
-                voteCount = updateResult.value.votedBy.length;
-                voters = updateResult.value.votedBy;
-            });
-
-            // Trigger real-time update via Pusher
             await pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
                 restaurantId,
                 votes: voteCount,
                 votedBy: voters
-            }).catch(error => {
-                console.error('Pusher trigger error:', error);
-                // Don't throw here, as the vote was successful
             });
-
-            return NextResponse.json({ 
-                success: true,
-                votes: voteCount,
-                votedBy: voters
-            });
+            console.log('Pusher update successful');
         } catch (error) {
-            if (error instanceof Error && error.message.includes('already voted')) {
-                return NextResponse.json({ 
-                    error: 'User has already voted for this restaurant'
-                }, { status: 400 });
-            }
-            throw error; // Re-throw other errors
-        } finally {
-            await session.endSession();
+            console.error('Pusher error:', error);
+            // Continue since the vote was successful
         }
+
+        console.log('Vote update complete');
+        return NextResponse.json({ 
+            success: true,
+            votes: voteCount,
+            votedBy: voters
+        });
     } catch (error) {
         console.error('Vote error:', error);
         return NextResponse.json({ 
