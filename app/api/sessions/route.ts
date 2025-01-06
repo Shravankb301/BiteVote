@@ -2,48 +2,6 @@ import { NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 import { MongoClient } from 'mongodb';
 
-// Define interfaces for the data structures
-interface GroupData {
-    name?: string;
-    members?: string[];
-    code?: string;
-    lastUpdated?: string;
-    restaurants?: Restaurant[];
-    votes?: Record<string, string>;
-    [key: string]: unknown;
-}
-
-interface Restaurant {
-    id: string;
-    name: string;
-    rating?: number;
-    location?: string;
-}
-
-// Function to sanitize data before saving to MongoDB
-function sanitizeData(data: unknown): unknown {
-    if (!data || typeof data !== 'object') {
-        return data;
-    }
-
-    // Remove _id fields and handle arrays
-    const sanitized = Array.isArray(data) 
-        ? data.map(item => sanitizeData(item))
-        : Object.entries(data as Record<string, unknown>).reduce((acc: Record<string, unknown>, [key, value]) => {
-            if (key === '_id') return acc;
-            
-            // Handle nested objects and arrays
-            if (value && typeof value === 'object') {
-                acc[key] = sanitizeData(value);
-            } else {
-                acc[key] = value;
-            }
-            return acc;
-        }, {});
-
-    return sanitized;
-}
-
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -62,7 +20,7 @@ export async function GET(request: Request) {
 
         const db = client.db('team-lunch-decider');
         const session = await db.collection('sessions')
-            .findOne({ code }, { maxTimeMS: 5000 }); // Set maximum execution time
+            .findOne({ code }, { maxTimeMS: 5000 });
 
         if (!session) {
             return NextResponse.json({ error: 'Session not found' }, { status: 404 });
