@@ -17,12 +17,14 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { generateGroupCode } from "@/lib/utils";
+import { useRouter } from 'next/navigation'
 
 interface LandingPageProps {
   onGroupCreated: () => void;
 }
 
 export default function LandingPage({ onGroupCreated }: LandingPageProps) {
+  const router = useRouter()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [groupName, setGroupName] = useState('')
   const [userName, setUserName] = useState('')
@@ -165,25 +167,43 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.6, duration: 0.5 }}
               >
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="relative inline-block"
-                >
+                <div className="relative inline-flex gap-4">
                   <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full blur-xl opacity-50 animate-pulse" />
-                  <Button 
-                    onClick={() => setIsModalOpen(true)}
-                    className="relative bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-8 py-6 text-lg rounded-full group shadow-lg shadow-purple-500/25"
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
-                    Start Planning Now
-                    <motion.div
-                      animate={{ x: [0, 5, 0] }}
-                      transition={{ repeat: Infinity, duration: 1.5 }}
+                    <Button 
+                      onClick={() => setIsModalOpen(true)}
+                      className="relative bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-8 py-6 text-lg rounded-full group shadow-lg shadow-purple-500/25"
                     >
-                      <ArrowRight className="ml-2 h-5 w-5" />
-                    </motion.div>
-                  </Button>
-                </motion.div>
+                      Start Planning Now
+                      <motion.div
+                        animate={{ x: [0, 5, 0] }}
+                        transition={{ repeat: Infinity, duration: 1.5 }}
+                      >
+                        <ArrowRight className="ml-2 h-5 w-5" />
+                      </motion.div>
+                    </Button>
+                  </motion.div>
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                  >
+                    <Button 
+                      onClick={() => router.push('/randomizer')}
+                      className="relative bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-8 py-6 text-lg rounded-full group shadow-lg shadow-purple-500/25"
+                    >
+                      Randomizer
+                      <motion.div
+                        animate={{ x: [0, 5, 0] }}
+                        transition={{ repeat: Infinity, duration: 1.5 }}
+                      >
+                        <ArrowRight className="ml-2 h-5 w-5" />
+                      </motion.div>
+                    </Button>
+                  </motion.div>
+                </div>
               </motion.div>
             </div>
           </motion.div>
