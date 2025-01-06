@@ -74,7 +74,6 @@ function GroupContent() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const searchParams = useSearchParams();
-  const sharedCode = searchParams.get('code');
   const [isClient, setIsClient] = useState(false);
   const [joinNotification, setJoinNotification] = useState<string>('');
   const [showNotification, setShowNotification] = useState(false);
@@ -211,7 +210,7 @@ function GroupContent() {
     };
 
     initializeGroup();
-  }, [searchParams]);
+  }, [searchParams, testUser]);
 
   const handleCopyLink = async () => {
     if (groupData) {

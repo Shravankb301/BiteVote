@@ -1,14 +1,12 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Loader2, Plus, Utensils, Check } from 'lucide-react'
 import RandomizerWheel from '@/components/RandomizerWheel'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { LocationInput } from "@/components/location-input"
 
 interface Restaurant {
   id: string;
@@ -18,12 +16,18 @@ interface Restaurant {
   icon?: string;
 }
 
+interface RestaurantApiResponse {
+  id: string;
+  name: string;
+  cuisine: string;
+  vicinity: string;
+}
+
 export default function RandomizerPage() {
   const [spinning, setSpinning] = useState(false)
   const [selectedRestaurant, setSelectedRestaurant] = useState<number | null>(null)
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [customRestaurants, setCustomRestaurants] = useState<Restaurant[]>([])
-  const [newRestaurant, setNewRestaurant] = useState({ name: '', cuisine: '' })
   const [showCelebration, setShowCelebration] = useState(false)
   const [restaurants, setRestaurants] = useState<Restaurant[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -67,7 +71,7 @@ export default function RandomizerPage() {
           throw new Error(data.error || 'Failed to fetch restaurants');
         }
         
-        const formattedRestaurants = data.map((restaurant: any) => ({
+        const formattedRestaurants = data.map((restaurant: RestaurantApiResponse) => ({
           id: restaurant.id,
           name: restaurant.name,
           cuisine: restaurant.cuisine,
@@ -86,48 +90,6 @@ export default function RandomizerPage() {
 
     getInitialLocation();
   }, []);
-
-  const handleLocationSelect = async (location: string | { lat: number; lng: number; query?: string }) => {
-    if (typeof location === 'string') {
-      setError("Please use the location detection feature");
-      return;
-    }
-
-    setCurrentLocation({ lat: location.lat, lng: location.lng });
-    setIsLoading(true);
-    setError(null);
-
-    const searchParams = new URLSearchParams({
-      lat: location.lat.toString(),
-      lng: location.lng.toString(),
-      radius: '5000'
-    });
-
-    try {
-      const response = await fetch(`/api/restaurants?${searchParams}`);
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch restaurants');
-      }
-      
-      // Transform the API data to match our Restaurant interface
-      const formattedRestaurants = data.map((restaurant: any) => ({
-        id: restaurant.id,
-        name: restaurant.name,
-        cuisine: restaurant.cuisine,
-        vicinity: restaurant.vicinity,
-        icon: getCuisineIcon(restaurant.cuisine)
-      }));
-
-      setRestaurants(formattedRestaurants);
-    } catch (error) {
-      console.error('Error fetching restaurants:', error);
-      setError(error instanceof Error ? error.message : 'Failed to fetch restaurants');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const getCuisineIcon = (cuisine: string): string => {
     const cuisineIcons: { [key: string]: string } = {
@@ -189,7 +151,7 @@ export default function RandomizerPage() {
         throw new Error(data.error || 'Failed to fetch restaurants');
       }
       
-      const formattedResults = data.map((restaurant: any) => ({
+      const formattedResults = data.map((restaurant: RestaurantApiResponse) => ({
         id: restaurant.id,
         name: restaurant.name,
         cuisine: restaurant.cuisine,

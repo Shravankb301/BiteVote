@@ -162,10 +162,6 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
     return votedRestaurants[restaurantId]?.length || 0;
   };
 
-  const getVoterNames = (restaurantId: string) => {
-    return votedRestaurants[restaurantId] || [];
-  };
-
   const handleMakeReservation = async () => {
     if (!isClient) return;
     const winner = getWinningRestaurant();

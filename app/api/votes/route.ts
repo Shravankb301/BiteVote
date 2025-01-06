@@ -27,7 +27,7 @@ export async function GET(request: Request) {
         });
     } catch (error) {
         return NextResponse.json({ 
-            error: 'Failed to fetch votes',
+            error: `Failed to fetch votes: ${error instanceof Error ? error.message : 'Unknown error'}`,
             votes: 0,
             votedBy: []
         }, { status: 500 });

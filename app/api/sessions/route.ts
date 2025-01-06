@@ -1,8 +1,26 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 
+// Define interfaces for the data structures
+interface GroupData {
+    name?: string;
+    members?: string[];
+    code?: string;
+    lastUpdated?: string;
+    restaurants?: Restaurant[];
+    votes?: Record<string, string>;
+    [key: string]: unknown;
+}
+
+interface Restaurant {
+    id: string;
+    name: string;
+    rating?: number;
+    location?: string;
+}
+
 // Function to sanitize data before saving to MongoDB
-function sanitizeData(data: any): any {
+function sanitizeData(data: unknown): unknown {
     if (!data || typeof data !== 'object') {
         return data;
     }
@@ -10,7 +28,7 @@ function sanitizeData(data: any): any {
     // Remove _id fields and handle arrays
     const sanitized = Array.isArray(data) 
         ? data.map(item => sanitizeData(item))
-        : Object.entries(data).reduce((acc: any, [key, value]) => {
+        : Object.entries(data as Record<string, unknown>).reduce((acc: Record<string, unknown>, [key, value]) => {
             if (key === '_id') return acc;
             
             // Handle nested objects and arrays
@@ -43,14 +61,15 @@ export async function GET(request: Request) {
         }
 
         return NextResponse.json(session);
-    } catch (error) {
+    } catch (e) {
+        console.error('Failed to fetch session:', e);
         return NextResponse.json({ error: 'Failed to fetch session' }, { status: 500 });
     }
 }
 
 export async function POST(request: Request) {
     try {
-        const { code, groupData } = await request.json();
+        const { code, groupData } = await request.json() as { code: string; groupData: GroupData };
 
         if (!code || !groupData) {
             return NextResponse.json({ error: 'Missing required data' }, { status: 400 });
@@ -60,7 +79,7 @@ export async function POST(request: Request) {
         const db = client.db();
 
         // Sanitize the data before saving
-        const sanitizedData = sanitizeData(groupData);
+        const sanitizedData = sanitizeData(groupData) as GroupData;
 
         // Update the session with sanitized data
         await db.collection('sessions').updateOne(
@@ -75,8 +94,8 @@ export async function POST(request: Request) {
         );
 
         return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error('Session update error:', error);
+    } catch (e) {
+        console.error('Session update error:', e);
         return NextResponse.json({ error: 'Failed to update session' }, { status: 500 });
     }
 } 

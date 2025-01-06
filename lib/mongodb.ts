@@ -11,18 +11,25 @@ const options = {};
 let client;
 let clientPromise: Promise<MongoClient>;
 
+const globalWithMongo = global as typeof globalThis & {
+  mongo: {
+    conn: MongoClient | null;
+    promise: Promise<MongoClient> | null;
+  };
+};
+
 if (process.env.NODE_ENV === 'development') {
   // In development mode, use a global variable so that the value
   // is preserved across module reloads caused by HMR (Hot Module Replacement).
-  let globalWithMongo = global as typeof globalThis & {
-    _mongoClientPromise?: Promise<MongoClient>
-  }
-
-  if (!globalWithMongo._mongoClientPromise) {
+  if (!globalWithMongo.mongo) {
     client = new MongoClient(uri, options);
-    globalWithMongo._mongoClientPromise = client.connect();
+    const clientPromise = client.connect();
+    globalWithMongo.mongo = {
+      conn: client,
+      promise: clientPromise
+    };
   }
-  clientPromise = globalWithMongo._mongoClientPromise;
+  clientPromise = globalWithMongo.mongo.promise!;
 } else {
   // In production mode, it's best to not use a global variable.
   client = new MongoClient(uri, options);

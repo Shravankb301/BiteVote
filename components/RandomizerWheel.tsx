@@ -1,23 +1,22 @@
 "use client"
 
 import { useState, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 
 interface RandomizerWheelProps {
   segments: number;
-  onSpin: () => void;
   spinning: boolean;
   selectedSegment: number | null;
+  onSpin: () => void;
 }
 
 export default function RandomizerWheel({ 
   segments,
-  onSpin, 
   spinning, 
-  selectedSegment 
+  selectedSegment,
+  onSpin
 }: RandomizerWheelProps) {
   const wheelSize = 400;
-  const radius = wheelSize / 2 - 40;
   const segmentAngle = 360 / segments;
   const [glowIndex, setGlowIndex] = useState<number | null>(null);
   const segmentOffset = segmentAngle / 2;
@@ -95,14 +94,12 @@ export default function RandomizerWheel({
           ease: "easeInOut"
         }}
       >
-        <div className="w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[30px] border-red-500">
-          <div className="absolute inset-0 blur-md bg-red-500/50" />
-        </div>
+        <div className="absolute inset-0 blur-md bg-red-500/50" />
       </motion.div>
 
       {/* Wheel */}
       <motion.div
-        className="w-full h-full rounded-full relative overflow-hidden shadow-2xl"
+        className="w-full h-full rounded-full relative overflow-hidden shadow-2xl cursor-pointer"
         initial={{ rotate: segmentOffset }}
         animate={{
           rotate: getWheelRotation(),
@@ -119,6 +116,7 @@ export default function RandomizerWheel({
             ease: "easeInOut"
           }
         }}
+        onClick={!spinning ? onSpin : undefined}
       >
         {/* Background */}
         <div className="absolute inset-0 rounded-full bg-slate-900" />
