@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getMongoClient } from '@/lib/db';
 import { pusherServer } from '@/lib/pusher';
+import { Document } from 'mongodb';
 
 interface VoteDocument {
     restaurantId: string;
@@ -17,7 +18,7 @@ const corsHeaders = {
 
 export async function POST(request: Request) {
     try {
-        // 1. Parse request - single operation
+        // 1. Parse request
         let body;
         try {
             body = await request.json();
@@ -50,51 +51,48 @@ export async function POST(request: Request) {
         const db = client.db('team-lunch-decider');
         const votesCollection = db.collection<VoteDocument>('votes');
 
-        // 3. Check for existing vote
-        const existingVote = await votesCollection.findOne(
-            { sessionId, votedBy: userId },
-            { maxTimeMS: 1000, projection: { votedBy: 1 } }
-        );
+        // 3. Check if user has voted in this session
+        const existingVoteInSession = await votesCollection.findOne({
+            sessionId,
+            votedBy: userId
+        }, { maxTimeMS: 1000 });
 
-        if (existingVote) {
+        if (existingVoteInSession) {
             return NextResponse.json({ 
-                error: 'Already voted',
-                votes: existingVote.votedBy.length,
-                votedBy: existingVote.votedBy
+                error: 'Already voted in this session',
+                votes: existingVoteInSession.votedBy.length,
+                votedBy: existingVoteInSession.votedBy
             }, { 
                 status: 400,
                 headers: corsHeaders 
             });
         }
 
-        // 4. Perform atomic update
-        const updateResult = await votesCollection.updateOne(
-            { restaurantId, sessionId },
-            { $addToSet: { votedBy: userId } },
+        // 4. Perform atomic update with upsert
+        const result = await votesCollection.findOneAndUpdate(
+            { 
+                restaurantId,
+                sessionId,
+                votedBy: { $ne: userId } // Prevent duplicate votes
+            },
+            { 
+                $addToSet: { votedBy: userId }
+            },
             { 
                 upsert: true,
+                returnDocument: 'after',
                 maxTimeMS: 3000
             }
-        );
+        ) as Document | null;
 
-        if (!updateResult.acknowledged) {
+        if (!result) {
             throw new Error('Vote update failed');
         }
 
-        // 5. Get updated document
-        const updatedDoc = await votesCollection.findOne(
-            { restaurantId, sessionId },
-            { maxTimeMS: 1000 }
-        );
-
-        if (!updatedDoc) {
-            throw new Error('Failed to retrieve vote');
-        }
-
-        const { votedBy } = updatedDoc;
+        const votedBy = (result as VoteDocument).votedBy;
         const votes = votedBy.length;
 
-        // 6. Fire Pusher update without waiting
+        // 5. Fire Pusher update without waiting
         void pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
             restaurantId,
             votes,
@@ -107,7 +105,7 @@ export async function POST(request: Request) {
             });
         });
 
-        // 7. Return success response
+        // 6. Return success response
         return NextResponse.json({ 
             success: true,
             votes,

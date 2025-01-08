@@ -95,13 +95,17 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
     
     channel.bind('vote-update', (data: VoteUpdateData) => {
       console.log('Received vote update:', data);
+      
+      // Update votes atomically
       setVotes(prevVotes => ({
         ...prevVotes,
-        [data.restaurantId]: data.votes || 0
+        [data.restaurantId]: data.votes
       }));
+      
+      // Update voted restaurants atomically
       setVotedRestaurants(prevVoted => ({
         ...prevVoted,
-        [data.restaurantId]: data.votedBy || []
+        [data.restaurantId]: data.votedBy
       }));
   
       // Update hasUserVoted when vote updates
@@ -117,13 +121,24 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
   }, [sessionId, currentUser, isClient]);
 
   const handleVote = async (restaurantId: string) => {
-    if (!isClient) return;
+    if (!isClient || votingInProgress || hasUserVoted) return;
 
     setVotingInProgress(restaurantId);
     setError(null);
 
     try {
         console.log('1. Starting vote submission:', { restaurantId, sessionId, currentUser });
+        
+        // Optimistically update UI
+        setHasUserVoted(true);
+        setVotes(prev => ({
+          ...prev,
+          [restaurantId]: (prev[restaurantId] || 0) + 1
+        }));
+        setVotedRestaurants(prev => ({
+          ...prev,
+          [restaurantId]: [...(prev[restaurantId] || []), currentUser]
+        }));
         
         // Prepare request body
         const requestBody = JSON.stringify({
@@ -167,35 +182,38 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
 
         if (!response.ok) {
             console.error('8. Response not OK:', data);
-            if (data.error === 'Already voted') {
+            // Revert optimistic updates on error
+            setHasUserVoted(false);
+            setVotes(prev => ({
+              ...prev,
+              [restaurantId]: Math.max(0, (prev[restaurantId] || 1) - 1)
+            }));
+            setVotedRestaurants(prev => ({
+              ...prev,
+              [restaurantId]: (prev[restaurantId] || []).filter(id => id !== currentUser)
+            }));
+
+            if (data.error === 'Already voted in this session') {
                 toast({
                     title: "Already Voted",
                     description: "You have already voted for a restaurant in this session.",
                     variant: "destructive"
                 });
+                setHasUserVoted(true);
             } else {
                 setError(data.error || 'Failed to vote');
+                toast({
+                    title: "Error",
+                    description: data.error || "Failed to vote. Please try again.",
+                    variant: "destructive"
+                });
             }
             return;
         }
 
         console.log('9. Vote successful:', data);
         
-        // Update local state
-        setVotes(prev => ({
-            ...prev,
-            [restaurantId]: data.votes
-        }));
-        setVotedRestaurants(prev => ({
-            ...prev,
-            [restaurantId]: data.votedBy
-        }));
-
-        console.log('10. Local state updated:', {
-            votes: data.votes,
-            votedBy: data.votedBy
-        });
-
+        // Server response will update state through Pusher
         toast({
             title: "Vote Recorded",
             description: "Your vote has been successfully recorded.",
@@ -210,6 +228,17 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
             message: error instanceof Error ? error.message : 'Unknown error',
             stack: error instanceof Error ? error.stack : undefined
         });
+        
+        // Revert optimistic updates on error
+        setHasUserVoted(false);
+        setVotes(prev => ({
+          ...prev,
+          [restaurantId]: Math.max(0, (prev[restaurantId] || 1) - 1)
+        }));
+        setVotedRestaurants(prev => ({
+          ...prev,
+          [restaurantId]: (prev[restaurantId] || []).filter(id => id !== currentUser)
+        }));
         
         setError(error instanceof Error ? error.message : 'Failed to vote');
         toast({
