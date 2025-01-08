@@ -1,7 +1,7 @@
 "use client"
 import React, { useState, useEffect } from 'react'
 import { Button } from "@/components/ui/button"
-import { Phone } from "lucide-react"
+import { Phone, Loader2, AlertCircle } from "lucide-react"
 import {
     Dialog,
     DialogContent,
@@ -12,6 +12,8 @@ import {
 import { Input } from "./ui/input"
 import { Label } from "./ui/label"
 import { pusherClient } from '@/lib/pusher'
+import { Alert, AlertDescription } from "./ui/alert"
+import { useToast } from "@/components/ui/use-toast"
 
 interface Restaurant {
   id: string;
@@ -50,6 +52,9 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
   const [dateTime, setDateTime] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [isCallInProgress, setIsCallInProgress] = useState(false);
+  const [votingInProgress, setVotingInProgress] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const testPhone = "+12604673696";
 
@@ -114,6 +119,9 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
   const handleVote = async (restaurantId: string) => {
     if (!isClient) return;
 
+    setVotingInProgress(restaurantId);
+    setError(null);
+
     try {
       console.log('Submitting vote for restaurant:', restaurantId);
       const response = await fetch('/api/votes', {
@@ -132,7 +140,16 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
       
       if (!response.ok) {
         console.error('Vote error:', data.error);
-        throw new Error(data.error || 'Failed to vote');
+        if (data.error === 'Already voted') {
+          toast({
+            title: "Already Voted",
+            description: "You have already voted for a restaurant in this session.",
+            variant: "destructive"
+          });
+        } else {
+          setError(data.error || 'Failed to vote');
+        }
+        return;
       }
 
       console.log('Vote successful:', data);
@@ -146,12 +163,24 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
         [restaurantId]: data.votedBy
       }));
 
+      toast({
+        title: "Vote Recorded",
+        description: "Your vote has been successfully recorded.",
+      });
+
       if (onVote) {
         onVote(restaurantId);
       }
     } catch (error) {
       console.error('Error voting:', error);
-      alert(error instanceof Error ? error.message : 'Failed to vote');
+      setError(error instanceof Error ? error.message : 'Failed to vote');
+      toast({
+        title: "Error",
+        description: "Failed to record your vote. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setVotingInProgress(null);
     }
   };
 
@@ -250,10 +279,18 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
         )}
       </div>
 
+      {error && (
+        <Alert variant="destructive" className="bg-red-500/10 border-red-500/20 text-red-400">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       {restaurants.map((restaurant) => {
         const hasVotedForThis = votedRestaurants[restaurant.id]?.includes(currentUser);
         const totalVotes = getTotalVotes(restaurant.id);
         const isWinner = winner?.id === restaurant.id && totalVotes > 0;
+        const isVoting = votingInProgress === restaurant.id;
 
         return (
           <div
@@ -275,22 +312,41 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
               </div>
               <div className="text-sm text-slate-400">
                 <div>Total Votes: {totalVotes}</div>
+                {votedRestaurants[restaurant.id]?.length > 0 && (
+                  <div className="text-xs text-slate-500">
+                    Voted by: {votedRestaurants[restaurant.id].join(', ')}
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex gap-2">
               <Button 
                 onClick={() => handleVote(restaurant.id)}
-                disabled={hasVotedForThis || hasUserVoted}
+                disabled={hasVotedForThis || hasUserVoted || isVoting}
                 variant={hasVotedForThis ? "secondary" : isWinner ? "default" : "default"}
                 className={`${hasVotedForThis || hasUserVoted ? "opacity-50" : ""} ${
                   isWinner && !hasVotedForThis && !hasUserVoted ? "bg-green-600 hover:bg-green-700" : ""
                 }`}
               >
-                {hasVotedForThis ? 'Voted' : hasUserVoted ? 'Already Voted' : isWinner ? 'Vote for Leader' : 'Vote'}
+                {isVoting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Voting...
+                  </>
+                ) : hasVotedForThis ? (
+                  'Voted'
+                ) : hasUserVoted ? (
+                  'Already Voted'
+                ) : isWinner ? (
+                  'Vote for Leader'
+                ) : (
+                  'Vote'
+                )}
               </Button>
               <Button 
                 variant="destructive" 
                 onClick={() => onRemove(restaurant.id)}
+                disabled={isVoting}
               >
                 Remove
               </Button>
