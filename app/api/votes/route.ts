@@ -51,42 +51,78 @@ export async function POST(request: Request) {
         const db = client.db('team-lunch-decider');
         const votesCollection = db.collection<VoteDocument>('votes');
 
-        // 3. Check if user has voted in this session
-        const existingVoteInSession = await votesCollection.findOne({
-            sessionId,
-            votedBy: userId
-        }, { maxTimeMS: 1000 });
+        // 3. Check if user has voted in this session (using aggregation for atomic operation)
+        const existingVotes = await votesCollection.aggregate([
+            { 
+                $match: { 
+                    sessionId,
+                    votedBy: userId 
+                } 
+            },
+            {
+                $group: {
+                    _id: null,
+                    restaurants: { $push: "$restaurantId" }
+                }
+            }
+        ]).toArray();
 
-        if (existingVoteInSession) {
+        if (existingVotes.length > 0) {
+            const votedRestaurants = existingVotes[0].restaurants;
             return NextResponse.json({ 
                 error: 'Already voted in this session',
-                votes: existingVoteInSession.votedBy.length,
-                votedBy: existingVoteInSession.votedBy
+                message: `You have already voted for ${votedRestaurants[0]} in this session`,
+                votes: 0,
+                votedBy: []
             }, { 
                 status: 400,
                 headers: corsHeaders 
             });
         }
 
-        // 4. Perform atomic update with upsert
-        const result = await votesCollection.findOneAndUpdate(
-            { 
-                restaurantId,
-                sessionId,
-                votedBy: { $ne: userId } // Prevent duplicate votes
-            },
-            { 
-                $addToSet: { votedBy: userId }
-            },
-            { 
-                upsert: true,
-                returnDocument: 'after',
-                maxTimeMS: 3000
-            }
-        ) as Document | null;
+        // 4. Start a session for atomic operations
+        const session = client.startSession();
+        let result: Document | null = null;
+
+        try {
+            await session.withTransaction(async () => {
+                // Double-check no vote exists (in transaction)
+                const voteExists = await votesCollection.findOne({
+                    sessionId,
+                    votedBy: userId
+                }, { session });
+
+                if (voteExists) {
+                    throw new Error('Already voted in this session');
+                }
+
+                // Perform atomic update with upsert
+                result = await votesCollection.findOneAndUpdate(
+                    { 
+                        restaurantId,
+                        sessionId,
+                        votedBy: { $ne: userId } // Extra safety check
+                    },
+                    { 
+                        $addToSet: { votedBy: userId }
+                    },
+                    { 
+                        upsert: true,
+                        returnDocument: 'after',
+                        session
+                    }
+                ) as Document | null;
+
+                if (!result) {
+                    throw new Error('Vote update failed');
+                }
+            });
+        } finally {
+            await session.endSession();
+        }
 
         if (!result) {
-            throw new Error('Vote update failed');
+            throw new Error('Vote transaction failed');
         }
 
         const votedBy = (result as VoteDocument).votedBy;

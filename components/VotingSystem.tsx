@@ -78,14 +78,25 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
       initialVotedRestaurants[r.id] = votedBy;
     });
     
-    // Check if the current user has already voted
+    // Check if the current user has already voted in any restaurant
     const userHasVoted = restaurants.some(r => r.votedBy?.includes(currentUser));
     console.log('User has voted:', userHasVoted, 'currentUser:', currentUser);
-    setHasUserVoted(userHasVoted);
     
+    if (userHasVoted) {
+      const votedRestaurant = restaurants.find(r => r.votedBy?.includes(currentUser));
+      if (votedRestaurant) {
+        toast({
+          title: "Previous Vote Found",
+          description: `You have already voted for ${votedRestaurant.name} in this session.`,
+          variant: "default"
+        });
+      }
+    }
+    
+    setHasUserVoted(userHasVoted);
     setVotes(initialVotes);
     setVotedRestaurants(initialVotedRestaurants);
-  }, [restaurants, isClient, currentUser]);
+  }, [restaurants, isClient, currentUser, toast]);
 
   // Subscribe to vote updates
   useEffect(() => {
@@ -111,6 +122,16 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
       // Update hasUserVoted when vote updates
       if (data.votedBy.includes(currentUser)) {
         setHasUserVoted(true);
+        
+        // Find restaurant name for the toast
+        const votedRestaurant = restaurants.find(r => r.id === data.restaurantId);
+        if (votedRestaurant) {
+          toast({
+            title: "Vote Confirmed",
+            description: `Your vote for ${votedRestaurant.name} has been recorded.`,
+            variant: "default"
+          });
+        }
       }
     });
 
@@ -118,10 +139,24 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
       console.log('Unsubscribing from Pusher channel');
       pusherClient.unsubscribe(`session-${sessionId}`);
     };
-  }, [sessionId, currentUser, isClient]);
+  }, [sessionId, currentUser, isClient, restaurants, toast]);
 
   const handleVote = async (restaurantId: string) => {
-    if (!isClient || votingInProgress || hasUserVoted) return;
+    if (!isClient || votingInProgress || hasUserVoted) {
+      if (hasUserVoted) {
+        const votedRestaurant = restaurants.find(restaurant => 
+          votedRestaurants[restaurant.id]?.includes(currentUser)
+        );
+        if (votedRestaurant) {
+          toast({
+            title: "Cannot Vote Again",
+            description: `You have already voted for ${votedRestaurant.name} in this session.`,
+            variant: "destructive"
+          });
+        }
+      }
+      return;
+    }
 
     setVotingInProgress(restaurantId);
     setError(null);
@@ -196,7 +231,7 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
             if (data.error === 'Already voted in this session') {
                 toast({
                     title: "Already Voted",
-                    description: "You have already voted for a restaurant in this session.",
+                    description: data.message || "You have already voted for a restaurant in this session.",
                     variant: "destructive"
                 });
                 setHasUserVoted(true);
@@ -214,9 +249,10 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
         console.log('9. Vote successful:', data);
         
         // Server response will update state through Pusher
+        const restaurant = restaurants.find(r => r.id === restaurantId);
         toast({
             title: "Vote Recorded",
-            description: "Your vote has been successfully recorded.",
+            description: `Your vote for ${restaurant?.name} has been recorded.`,
         });
 
         if (onVote) {
