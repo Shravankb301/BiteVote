@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { checkConnection, reconnect } from '@/lib/mongodb';
+import clientPromise, { checkConnection } from '@/lib/mongodb';
 import { pusherServer } from '@/lib/pusher';
 import { MongoClient } from 'mongodb';
 
@@ -16,47 +16,59 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-const getMongoClient = async (retries = 3): Promise<MongoClient> => {
-    let lastError: Error | null = null;
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            console.log(`MongoDB connection attempt ${attempt}/${retries}`);
-            
-            const client = await clientPromise;
-            console.log('Initial connection successful, checking connection...');
-            
-            const isConnected = await checkConnection();
-            if (!isConnected) {
-                throw new Error('MongoDB connection check failed');
-            }
-            
-            console.log('MongoDB connection verified');
-            return client;
-        } catch (error) {
-            lastError = error instanceof Error ? error : new Error('Unknown connection error');
-            console.error(`Connection attempt ${attempt} failed:`, {
-                error: lastError.message,
-                stack: lastError.stack
-            });
-            
-            if (attempt < retries) {
-                console.log(`Waiting before retry ${attempt + 1}...`);
-                await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
-                await reconnect();
-            }
+// Simplified MongoDB client getter - removes multiple retries since we have connection pooling
+const getMongoClient = async (): Promise<MongoClient> => {
+    try {
+        console.log('Attempting MongoDB connection...');
+        const client = await clientPromise;
+        const isConnected = await checkConnection();
+        
+        if (!isConnected) {
+            throw new Error('MongoDB connection check failed');
         }
+        
+        console.log('MongoDB connection verified');
+        return client;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown connection error';
+        console.error('MongoDB connection error:', { error: errorMessage });
+        throw error;
     }
-    throw new Error(`Failed to connect after ${retries} attempts. Last error: ${lastError?.message}`);
 };
 
+// Ensure indexes exist for optimal query performance
+async function ensureIndexes() {
+    try {
+        const client = await getMongoClient();
+        const db = client.db('team-lunch-decider');
+        await db.collection('votes').createIndex(
+            { sessionId: 1, restaurantId: 1 },
+            { unique: true }
+        );
+        console.log('MongoDB indexes verified');
+    } catch (error) {
+        console.error('Failed to create indexes:', error);
+    }
+}
+
+// Call this when the app starts
+ensureIndexes();
+
 export async function GET(request: Request) {
+    console.log('GET /api/votes - Starting request');
     try {
         const { searchParams } = new URL(request.url);
         const restaurantId = searchParams.get('restaurantId');
         const sessionId = searchParams.get('sessionId');
 
+        console.log('GET /api/votes - Parameters:', { restaurantId, sessionId });
+
         if (!restaurantId || !sessionId) {
-            return NextResponse.json({ error: 'Missing parameters' }, { 
+            return NextResponse.json({ 
+                error: 'Missing parameters',
+                votes: 0,
+                votedBy: []
+            }, { 
                 status: 400,
                 headers: corsHeaders
             });
@@ -70,6 +82,8 @@ export async function GET(request: Request) {
             sessionId,
         }, { maxTimeMS: 5000 });
 
+        console.log('GET /api/votes - Retrieved vote:', vote);
+
         return NextResponse.json({ 
             votes: vote?.votedBy?.length ?? 0,
             votedBy: vote?.votedBy ?? []
@@ -77,7 +91,7 @@ export async function GET(request: Request) {
             headers: corsHeaders
         });
     } catch (error) {
-        console.error('Failed to fetch votes:', error);
+        console.error('GET /api/votes - Failed to fetch votes:', error);
         return NextResponse.json({ 
             error: 'Failed to fetch votes',
             votes: 0,
@@ -90,9 +104,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+    console.log('POST /api/votes - Starting request');
     try {
         const body = await request.json();
         const { restaurantId, sessionId, userId } = body;
+
+        console.log('POST /api/votes - Request body:', { restaurantId, sessionId, userId });
 
         if (!restaurantId || !sessionId || !userId) {
             return NextResponse.json({ 
@@ -105,11 +122,30 @@ export async function POST(request: Request) {
             });
         }
 
-        const client = await clientPromise;
+        const client = await getMongoClient();
         const db = client.db('team-lunch-decider');
         const votesCollection = db.collection<VoteDocument>('votes');
 
-        // Simple update operation with upsert
+        // Check if user has already voted
+        const existingVote = await votesCollection.findOne({ 
+            restaurantId, 
+            sessionId,
+            votedBy: userId
+        });
+
+        if (existingVote) {
+            console.log('POST /api/votes - User already voted');
+            return NextResponse.json({ 
+                error: 'Already voted',
+                votes: existingVote.votedBy.length,
+                votedBy: existingVote.votedBy
+            }, { 
+                status: 400,
+                headers: corsHeaders 
+            });
+        }
+
+        // Add the vote
         const result = await votesCollection.updateOne(
             { restaurantId, sessionId },
             { 
@@ -117,6 +153,8 @@ export async function POST(request: Request) {
             },
             { upsert: true }
         );
+
+        console.log('POST /api/votes - Update result:', result);
 
         if (!result.acknowledged) {
             return NextResponse.json({ 
@@ -138,6 +176,8 @@ export async function POST(request: Request) {
         const votes = updatedDoc?.votedBy?.length || 0;
         const votedBy = updatedDoc?.votedBy || [];
 
+        console.log('POST /api/votes - Updated document:', updatedDoc);
+
         // Trigger Pusher update
         try {
             await pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
@@ -145,8 +185,9 @@ export async function POST(request: Request) {
                 votes,
                 votedBy
             });
+            console.log('POST /api/votes - Pusher update sent successfully');
         } catch (error) {
-            console.error('Pusher error:', error);
+            console.error('POST /api/votes - Pusher error:', error);
         }
 
         return NextResponse.json({ 
@@ -158,7 +199,7 @@ export async function POST(request: Request) {
         });
 
     } catch (error) {
-        console.error('Vote error:', error);
+        console.error('POST /api/votes - Vote error:', error);
         return NextResponse.json({ 
             error: 'Failed to process vote',
             votes: 0,
