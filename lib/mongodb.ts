@@ -7,6 +7,12 @@ if (!process.env.MONGODB_URI) {
 const uri = process.env.MONGODB_URI;
 console.log('MongoDB URI configured:', { uri: uri.substring(0, 20) + '...' });
 
+// Add type declaration for global MongoDB client
+declare global {
+  // eslint-disable-next-line no-var
+  var _mongoClientPromise: Promise<MongoClient> | undefined;
+}
+
 // Optimized options for better connection handling
 const options = {
   maxPoolSize: 10,
@@ -21,48 +27,26 @@ const options = {
   tlsInsecure: false
 };
 
-let client: MongoClient | null = null;
 let clientPromise: Promise<MongoClient>;
 
-const globalWithMongo = global as typeof globalThis & {
-  mongo: {
-    conn: MongoClient | null;
-    promise: Promise<MongoClient> | null;
-  };
-};
-
 if (process.env.NODE_ENV === 'development') {
-  if (!globalWithMongo.mongo) {
-    globalWithMongo.mongo = {
-      conn: null,
-      promise: null
-    };
-  }
-
-  if (!globalWithMongo.mongo.promise) {
-    client = new MongoClient(uri, options);
-    globalWithMongo.mongo.promise = client.connect()
+  // In development, use global variable to preserve connection across HMR
+  if (!global._mongoClientPromise) {
+    const client = new MongoClient(uri, options);
+    global._mongoClientPromise = client.connect()
       .then(client => {
         console.log('Connected to MongoDB in development');
         return client;
-      })
-      .catch(err => {
-        console.error('Failed to connect to MongoDB:', err);
-        throw err;
       });
   }
-  clientPromise = globalWithMongo.mongo.promise;
+  clientPromise = global._mongoClientPromise;
 } else {
-  // In production, use a new connection
-  client = new MongoClient(uri, options);
+  // In production, it's best to not use a global variable
+  const client = new MongoClient(uri, options);
   clientPromise = client.connect()
     .then(client => {
       console.log('Connected to MongoDB in production');
       return client;
-    })
-    .catch(err => {
-      console.error('Failed to connect to MongoDB:', err);
-      throw err;
     });
 }
 
@@ -75,23 +59,6 @@ export const checkConnection = async () => {
   } catch (error) {
     console.error('MongoDB connection health check failed:', error);
     return false;
-  }
-};
-
-// Add reconnection function
-export const reconnect = async () => {
-  try {
-    if (client) {
-      await client.close();
-    }
-    client = new MongoClient(uri, options);
-    clientPromise = client.connect();
-    const newClient = await clientPromise;
-    console.log('Successfully reconnected to MongoDB');
-    return newClient;
-  } catch (error) {
-    console.error('Failed to reconnect to MongoDB:', error);
-    throw error;
   }
 };
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { checkConnection, reconnect } from '@/lib/mongodb';
+import clientPromise, { checkConnection } from '@/lib/mongodb';
 import { MongoClient } from 'mongodb';
 
 interface GroupData {
@@ -27,34 +27,32 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-const getMongoClient = async (retries = 3): Promise<MongoClient> => {
-    try {
-        const client = await clientPromise;
-        const isConnected = await checkConnection();
-        if (!isConnected) {
-            throw new Error('MongoDB connection check failed');
-        }
-        return client;
-    } catch (error) {
-        if (retries > 0) {
+const getMongoClient = async (): Promise<MongoClient> => {
+    let retries = 3;
+    while (retries > 0) {
+        try {
+            const client = await clientPromise;
+            const isConnected = await checkConnection();
+            if (!isConnected) {
+                throw new Error('MongoDB connection check failed');
+            }
+            return client;
+        } catch (error) {
+            retries--;
+            if (retries === 0) throw error;
             console.log(`Retrying MongoDB connection... (${retries} attempts left)`);
-            await reconnect();
-            return getMongoClient(retries - 1);
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
-        throw error;
     }
+    throw new Error('Failed to connect to MongoDB after multiple attempts');
 };
 
 export async function GET(request: Request) {
-    console.log('Session GET request received');
     try {
         const { searchParams } = new URL(request.url);
         const code = searchParams.get('code');
 
-        console.log('Fetching session with code:', code);
-
         if (!code) {
-            console.error('No code provided in request');
             return NextResponse.json(
                 { error: 'Code parameter is required' },
                 { status: 400, headers: corsHeaders }
@@ -62,16 +60,11 @@ export async function GET(request: Request) {
         }
 
         const client = await getMongoClient();
-        console.log('Connected to MongoDB');
-
         const db = client.db('team-lunch-decider');
         const session = await db.collection('sessions')
             .findOne({ code }, { maxTimeMS: 10000 });
 
-        console.log('Session lookup result:', session ? 'Found' : 'Not found');
-
         if (!session) {
-            console.log('No session found for code:', code);
             return NextResponse.json({ 
                 error: 'Session not found',
                 code,
@@ -94,15 +87,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    console.log('Session POST request received');
     try {
-        const body = await request.json();
+        const body = await request.json().catch(() => ({}));
         const { code, groupData } = body;
 
-        console.log('Creating/updating session with code:', code);
-
         if (!code || !groupData) {
-            console.error('Missing required fields:', { code: !!code, groupData: !!groupData });
             return NextResponse.json(
                 { error: 'Code and groupData are required' },
                 { status: 400, headers: corsHeaders }
@@ -110,8 +99,6 @@ export async function POST(request: Request) {
         }
 
         const client = await getMongoClient();
-        console.log('Connected to MongoDB');
-
         const db = client.db('team-lunch-decider');
         
         // Create a new object without the _id field
@@ -123,18 +110,11 @@ export async function POST(request: Request) {
         // Add timestamp for debugging
         groupDataToSave.lastUpdated = new Date().toISOString();
 
-        console.log('Updating session document...');
         const result = await db.collection('sessions').updateOne(
             { code },
             { $set: groupDataToSave },
             { upsert: true, maxTimeMS: 10000 }
         );
-
-        console.log('Session update result:', {
-            matched: result.matchedCount,
-            modified: result.modifiedCount,
-            upserted: result.upsertedCount
-        });
 
         return NextResponse.json({ 
             success: true,
@@ -155,5 +135,8 @@ export async function POST(request: Request) {
 }
 
 export async function OPTIONS() {
-    return NextResponse.json({}, { headers: corsHeaders });
+    return new Response(null, { 
+        status: 204,
+        headers: corsHeaders 
+    });
 } 
