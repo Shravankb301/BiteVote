@@ -44,27 +44,36 @@ const createResponse = (data: ResponseData, status = 200) => {
 };
 
 const getMongoClient = async (retries = 3): Promise<MongoClient> => {
-    try {
-        const client = await Promise.race([
-            clientPromise,
-            new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Connection timeout')), 5000)
-            )
-        ]) as MongoClient;
-        
-        const isConnected = await checkConnection();
-        if (!isConnected) {
-            throw new Error('MongoDB connection check failed');
+    let lastError: Error | null = null;
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            console.log(`MongoDB connection attempt ${attempt}/${retries}`);
+            
+            const client = await clientPromise;
+            console.log('Initial connection successful, checking connection...');
+            
+            const isConnected = await checkConnection();
+            if (!isConnected) {
+                throw new Error('MongoDB connection check failed');
+            }
+            
+            console.log('MongoDB connection verified');
+            return client;
+        } catch (error) {
+            lastError = error instanceof Error ? error : new Error('Unknown connection error');
+            console.error(`Connection attempt ${attempt} failed:`, {
+                error: lastError.message,
+                stack: lastError.stack
+            });
+            
+            if (attempt < retries) {
+                console.log(`Waiting before retry ${attempt + 1}...`);
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+                await reconnect();
+            }
         }
-        return client;
-    } catch (error) {
-        if (retries > 0) {
-            console.log(`Retrying MongoDB connection... (${retries} attempts left)`);
-            await reconnect();
-            return getMongoClient(retries - 1);
-        }
-        throw error;
     }
+    throw new Error(`Failed to connect after ${retries} attempts. Last error: ${lastError?.message}`);
 };
 
 export async function GET(request: Request) {
@@ -138,20 +147,26 @@ export async function POST(request: Request) {
             }, 400);
         }
 
-        // Connect to MongoDB with timeout
+        // Connect to MongoDB with retries and better error handling
         console.log('Connecting to MongoDB...');
         try {
-            mongoClient = await Promise.race([
-                getMongoClient(),
-                new Promise<never>((_, reject) => 
-                    setTimeout(() => reject(new Error('MongoDB connection timeout')), 5000)
-                )
-            ]);
+            mongoClient = await getMongoClient();
+            if (!mongoClient) {
+                throw new Error('Failed to obtain MongoDB client');
+            }
         } catch (dbError) {
-            console.error('MongoDB connection error:', dbError);
+            console.error('MongoDB connection error:', {
+                error: dbError instanceof Error ? {
+                    message: dbError.message,
+                    stack: dbError.stack
+                } : dbError,
+                timestamp: new Date().toISOString()
+            });
             return createResponse({
                 error: 'Database connection failed',
-                details: dbError instanceof Error ? dbError.message : 'Unknown error'
+                details: dbError instanceof Error ? 
+                    `Connection error: ${dbError.message}` : 
+                    'Unknown database connection error'
             }, 503);
         }
 
