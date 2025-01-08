@@ -89,13 +89,16 @@ export async function POST(request: Request) {
 
         if (!restaurantId || !sessionId || !userId) {
             console.error('Missing parameters:', { restaurantId, sessionId, userId });
-            return NextResponse.json({ 
-                error: 'Missing parameters',
-                details: { restaurantId, sessionId, userId }
-            }, { 
-                status: 400,
-                headers: corsHeaders
-            });
+            return new Response(
+                JSON.stringify({ 
+                    error: 'Missing parameters',
+                    details: { restaurantId, sessionId, userId }
+                }), 
+                { 
+                    status: 400,
+                    headers: corsHeaders
+                }
+            );
         }
 
         console.log('Connecting to MongoDB...');
@@ -115,14 +118,17 @@ export async function POST(request: Request) {
 
         if (existingVote) {
             console.log('User has already voted for this restaurant');
-            return NextResponse.json({ 
-                error: 'Already voted',
-                votes: existingVote.votedBy.length,
-                votedBy: existingVote.votedBy
-            }, { 
-                status: 400,
-                headers: corsHeaders
-            });
+            return new Response(
+                JSON.stringify({ 
+                    error: 'Already voted',
+                    votes: existingVote.votedBy.length,
+                    votedBy: existingVote.votedBy
+                }), 
+                { 
+                    status: 400,
+                    headers: corsHeaders
+                }
+            );
         }
 
         // First find the current document
@@ -196,13 +202,16 @@ export async function POST(request: Request) {
             // Continue since the vote was successful
         }
 
-        return NextResponse.json({ 
-            success: true,
-            votes: voteCount,
-            votedBy: voters
-        }, {
-            headers: corsHeaders
-        });
+        return new Response(
+            JSON.stringify({ 
+                success: true,
+                votes: voteCount,
+                votedBy: voters
+            }), 
+            {
+                headers: corsHeaders
+            }
+        );
     } catch (error) {
         console.error('Vote error:', error);
         if (error instanceof Error) {
@@ -210,18 +219,21 @@ export async function POST(request: Request) {
             console.error('Error message:', error.message);
             console.error('Error stack:', error.stack);
         }
-        return NextResponse.json({ 
-            error: 'Failed to process vote',
-            details: error instanceof Error ? error.message : 'Unknown error',
-            votes: 0,
-            votedBy: []
-        }, { 
-            status: 500,
-            headers: corsHeaders
-        });
+        return new Response(
+            JSON.stringify({ 
+                error: 'Failed to process vote',
+                details: error instanceof Error ? error.message : 'Unknown error',
+                votes: 0,
+                votedBy: []
+            }), 
+            { 
+                status: 500,
+                headers: corsHeaders
+            }
+        );
     }
 }
 
 export async function OPTIONS() {
-    return NextResponse.json({}, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
 } 
