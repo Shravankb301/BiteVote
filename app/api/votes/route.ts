@@ -9,11 +9,38 @@ interface VoteDocument {
     votedBy: string[];
 }
 
+interface ResponseData {
+    success?: boolean;
+    error?: string;
+    details?: string | Record<string, unknown>;
+    votes?: number;
+    votedBy?: string[];
+}
+
 const corsHeaders = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+const createResponse = (data: ResponseData, status = 200) => {
+    try {
+        const jsonString = JSON.stringify(data);
+        return new Response(jsonString, {
+            status,
+            headers: corsHeaders
+        });
+    } catch (error) {
+        console.error('Error creating response:', error);
+        return new Response(JSON.stringify({
+            error: 'Internal server error',
+            details: 'Failed to create response'
+        } as ResponseData), {
+            status: 500,
+            headers: corsHeaders
+        });
+    }
 };
 
 const getMongoClient = async (retries = 3): Promise<MongoClient> => {
@@ -81,101 +108,107 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    console.log('Vote POST request received');
+    console.log('Vote POST request received at:', new Date().toISOString());
+    let mongoClient: MongoClient | null = null;
+
     try {
-        const body = await request.json();
-        console.log('Request body:', body);
+        // Parse request with timeout
+        const bodyText = await request.text();
+        console.log('Raw request body:', bodyText);
+        
+        let body;
+        try {
+            body = JSON.parse(bodyText);
+        } catch (parseError) {
+            console.error('Failed to parse request body:', parseError);
+            return createResponse({
+                error: 'Invalid request format',
+                details: 'Failed to parse request body'
+            }, 400);
+        }
+
+        console.log('Parsed request body:', body);
         const { restaurantId, sessionId, userId } = body;
 
         if (!restaurantId || !sessionId || !userId) {
             console.error('Missing parameters:', { restaurantId, sessionId, userId });
-            return new Response(
-                JSON.stringify({ 
-                    error: 'Missing parameters',
-                    details: { restaurantId, sessionId, userId }
-                }), 
-                { 
-                    status: 400,
-                    headers: corsHeaders
-                }
-            );
+            return createResponse({
+                error: 'Missing parameters',
+                details: { restaurantId, sessionId, userId }
+            }, 400);
         }
 
+        // Connect to MongoDB with timeout
         console.log('Connecting to MongoDB...');
-        const client = await getMongoClient();
+        try {
+            mongoClient = await Promise.race([
+                getMongoClient(),
+                new Promise<never>((_, reject) => 
+                    setTimeout(() => reject(new Error('MongoDB connection timeout')), 5000)
+                )
+            ]);
+        } catch (dbError) {
+            console.error('MongoDB connection error:', dbError);
+            return createResponse({
+                error: 'Database connection failed',
+                details: dbError instanceof Error ? dbError.message : 'Unknown error'
+            }, 503);
+        }
+
         console.log('Connected to MongoDB');
-        
-        const db = client.db('team-lunch-decider');
+        const db = mongoClient.db('team-lunch-decider');
         const votesCollection = db.collection<VoteDocument>('votes');
 
-        // First check if user has already voted with timeout
-        console.log('Checking if user has already voted...');
-        const existingVote = await votesCollection.findOne({
-            restaurantId,
-            sessionId,
-            votedBy: userId
-        }, { maxTimeMS: 5000 });
+        // Check for existing vote with timeout
+        console.log('Checking for existing vote...');
+        const existingVote = await Promise.race([
+            votesCollection.findOne({
+                restaurantId,
+                sessionId,
+                votedBy: userId
+            }),
+            new Promise<null>((_, reject) => 
+                setTimeout(() => reject(new Error('Find operation timeout')), 5000)
+            )
+        ]);
 
         if (existingVote) {
-            console.log('User has already voted for this restaurant');
-            return new Response(
-                JSON.stringify({ 
-                    error: 'Already voted',
-                    votes: existingVote.votedBy.length,
-                    votedBy: existingVote.votedBy
-                }), 
-                { 
-                    status: 400,
-                    headers: corsHeaders
-                }
-            );
+            console.log('User has already voted:', { userId, restaurantId });
+            return createResponse({
+                error: 'Already voted',
+                votes: existingVote.votedBy.length,
+                votedBy: existingVote.votedBy
+            }, 400);
         }
 
-        // First find the current document
-        const currentDoc = await votesCollection.findOne({ 
-            restaurantId, 
-            sessionId 
-        });
-
-        let updatedDoc;
-        if (!currentDoc) {
-            // Insert new document if none exists
-            const insertResult = await votesCollection.insertOne({
-                restaurantId,
-                sessionId,
-                votedBy: [userId]
-            });
-            
-            if (!insertResult.acknowledged) {
-                throw new Error('Failed to insert vote document');
-            }
-
-            updatedDoc = {
-                restaurantId,
-                sessionId,
-                votedBy: [userId]
-            };
-        } else {
-            // Update existing document
-            const updateResult = await votesCollection.updateOne(
+        // Perform vote operation with timeout
+        console.log('Recording vote...');
+        const updateResult = await Promise.race([
+            votesCollection.findOneAndUpdate(
                 { restaurantId, sessionId },
-                { $addToSet: { votedBy: userId } }
-            );
+                {
+                    $setOnInsert: { restaurantId, sessionId },
+                    $addToSet: { votedBy: userId }
+                },
+                {
+                    upsert: true,
+                    returnDocument: 'after'
+                }
+            ),
+            new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error('Vote operation timeout')), 5000)
+            )
+        ]);
 
-            if (!updateResult.acknowledged) {
-                throw new Error('Failed to update vote document');
-            }
-
-            updatedDoc = {
-                ...currentDoc,
-                votedBy: [...(currentDoc.votedBy || []), userId]
-            };
+        if (!updateResult) {
+            throw new Error('Vote operation failed - no document returned');
         }
 
-        const voteCount = updatedDoc.votedBy.length;
-        const voters = updatedDoc.votedBy;
+        const updatedDoc = updateResult;
+        const voteCount = updatedDoc.votedBy?.length || 0;
+        const voters = updatedDoc.votedBy || [];
 
-        console.log('Vote recorded successfully:', {
+        console.log('Vote recorded:', {
             restaurantId,
             sessionId,
             userId,
@@ -183,7 +216,7 @@ export async function POST(request: Request) {
             voters
         });
 
-        // Trigger real-time update with timeout
+        // Trigger Pusher update with timeout
         try {
             console.log('Triggering Pusher update...');
             await Promise.race([
@@ -192,45 +225,47 @@ export async function POST(request: Request) {
                     votes: voteCount,
                     votedBy: voters
                 }),
-                new Promise((_, reject) => 
+                new Promise<never>((_, reject) => 
                     setTimeout(() => reject(new Error('Pusher timeout')), 3000)
                 )
             ]);
             console.log('Pusher update successful');
-        } catch (error) {
-            console.error('Pusher error:', error);
-            // Continue since the vote was successful
+        } catch (pusherError) {
+            console.error('Pusher error:', pusherError);
+            // Continue since vote was successful
         }
 
-        return new Response(
-            JSON.stringify({ 
-                success: true,
-                votes: voteCount,
-                votedBy: voters
-            }), 
-            {
-                headers: corsHeaders
-            }
-        );
+        return createResponse({
+            success: true,
+            votes: voteCount,
+            votedBy: voters
+        });
+
     } catch (error) {
-        console.error('Vote error:', error);
-        if (error instanceof Error) {
-            console.error('Error name:', error.name);
-            console.error('Error message:', error.message);
-            console.error('Error stack:', error.stack);
-        }
-        return new Response(
-            JSON.stringify({ 
-                error: 'Failed to process vote',
-                details: error instanceof Error ? error.message : 'Unknown error',
-                votes: 0,
-                votedBy: []
-            }), 
-            { 
-                status: 500,
-                headers: corsHeaders
+        console.error('Vote error:', {
+            timestamp: new Date().toISOString(),
+            error: error instanceof Error ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack
+            } : error
+        });
+
+        return createResponse({
+            error: 'Failed to process vote',
+            details: error instanceof Error ? error.message : 'Unknown error',
+            votes: 0,
+            votedBy: []
+        }, 500);
+    } finally {
+        if (mongoClient) {
+            try {
+                await mongoClient.close();
+                console.log('MongoDB connection closed');
+            } catch (closeError) {
+                console.error('Error closing MongoDB connection:', closeError);
             }
-        );
+        }
     }
 }
 
