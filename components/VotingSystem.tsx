@@ -62,6 +62,7 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
   useEffect(() => {
     if (!isClient) return;
 
+    console.log('Initializing votes state with restaurants:', restaurants);
     const initialVotes: Record<string, number> = {};
     const initialVotedRestaurants: Record<string, string[]> = {};
     
@@ -74,6 +75,7 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
     
     // Check if the current user has already voted
     const userHasVoted = restaurants.some(r => r.votedBy?.includes(currentUser));
+    console.log('User has voted:', userHasVoted, 'currentUser:', currentUser);
     setHasUserVoted(userHasVoted);
     
     setVotes(initialVotes);
@@ -87,6 +89,7 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
     const channel = pusherClient.subscribe(`session-${sessionId}`);
     
     channel.bind('vote-update', (data: VoteUpdateData) => {
+      console.log('Received vote update:', data);
       setVotes(prevVotes => ({
         ...prevVotes,
         [data.restaurantId]: data.votes || 0
@@ -103,6 +106,7 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
     });
 
     return () => {
+      console.log('Unsubscribing from Pusher channel');
       pusherClient.unsubscribe(`session-${sessionId}`);
     };
   }, [sessionId, currentUser, isClient]);
@@ -111,6 +115,7 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
     if (!isClient) return;
 
     try {
+      console.log('Submitting vote for restaurant:', restaurantId);
       const response = await fetch('/api/votes', {
         method: 'POST',
         headers: {
@@ -126,9 +131,11 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
       const data = await response.json();
       
       if (!response.ok) {
+        console.error('Vote error:', data.error);
         throw new Error(data.error || 'Failed to vote');
       }
 
+      console.log('Vote successful:', data);
       // Update local state with the server response
       setVotes(prev => ({
         ...prev,

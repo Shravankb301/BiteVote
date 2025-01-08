@@ -7,20 +7,14 @@ if (!process.env.MONGODB_URI) {
 const uri = process.env.MONGODB_URI;
 console.log('Connecting to MongoDB...', { uri: uri.substring(0, 20) + '...' });
 
+// Simplified options based on MongoDB Atlas recommendations
 const options = {
-  connectTimeoutMS: 10000,
-  socketTimeoutMS: 30000,
-  maxPoolSize: 50,
-  minPoolSize: 10,
-  maxIdleTimeMS: 30000,
+  maxPoolSize: 10,
+  minPoolSize: 5,
   retryWrites: true,
   retryReads: true,
-  ssl: true,
   tls: true,
-  tlsAllowInvalidCertificates: true, // For development only, remove in production
-  tlsAllowInvalidHostnames: true,    // For development only, remove in production
-  useNewUrlParser: true,
-  useUnifiedTopology: true
+  tlsInsecure: false // Required for some Node.js versions
 };
 
 let client;
@@ -48,15 +42,7 @@ if (process.env.NODE_ENV === 'development') {
   }
   clientPromise = globalWithMongo.mongo.promise!;
 } else {
-  // In production, use more secure TLS options
-  const productionOptions = {
-    ...options,
-    tlsAllowInvalidCertificates: false,
-    tlsAllowInvalidHostnames: false,
-    ssl: true,
-    tls: true,
-  };
-  client = new MongoClient(uri, productionOptions);
+  client = new MongoClient(uri, options);
   clientPromise = client.connect()
     .catch(err => {
       console.error('Failed to connect to MongoDB:', err);

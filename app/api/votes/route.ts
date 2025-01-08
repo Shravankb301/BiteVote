@@ -76,35 +76,71 @@ export async function POST(request: Request) {
         const existingVote = await votesCollection.findOne({
             restaurantId,
             sessionId,
-            votedBy: userId
+            votedBy: { $elemMatch: { $eq: userId } }
         }, { maxTimeMS: 5000 });
+
+        console.log('Existing vote check result:', existingVote);
 
         if (existingVote) {
             console.log('User has already voted');
             return NextResponse.json({ 
-                error: 'User has already voted for this restaurant'
+                error: 'User has already voted for this restaurant',
+                votes: existingVote.votedBy?.length || 0,
+                votedBy: existingVote.votedBy || []
             }, { status: 400 });
         }
 
-        // Update vote without transaction for simplicity
+        let finalVoteDoc: VoteDocument | null = null;
+
+        // First try to update an existing document
         console.log('Updating vote...');
         const updateResult = await votesCollection.findOneAndUpdate(
-            { restaurantId, sessionId },
-            { $addToSet: { votedBy: userId } },
             { 
-                upsert: true,
-                returnDocument: 'after',
-                maxTimeMS: 5000
+                restaurantId, 
+                sessionId,
+                votedBy: { $exists: true } // Only update if votedBy exists
+            },
+            { 
+                $addToSet: { 
+                    votedBy: userId 
+                }
+            },
+            { 
+                returnDocument: 'after'
             }
         );
 
-        if (!updateResult?.value) {
-            console.error('Failed to update vote - no value returned');
-            throw new Error('Failed to update vote');
+        if (updateResult?.value) {
+            finalVoteDoc = updateResult.value;
         }
 
-        const voteCount = updateResult.value.votedBy.length;
-        const voters = updateResult.value.votedBy;
+        // If no existing document was found, create a new one
+        if (!finalVoteDoc) {
+            console.log('No existing vote document, creating new one...');
+            const newVoteDoc: VoteDocument = {
+                restaurantId,
+                sessionId,
+                votedBy: [userId]
+            };
+            
+            const insertResult = await votesCollection.insertOne(newVoteDoc);
+            if (!insertResult.acknowledged) {
+                throw new Error('Failed to create vote document');
+            }
+            
+            finalVoteDoc = newVoteDoc;
+        }
+
+        console.log('Final vote document:', finalVoteDoc);
+
+        if (!finalVoteDoc) {
+            console.error('Failed to update/create vote document');
+            throw new Error('Failed to update/create vote document');
+        }
+
+        // Get the vote counts
+        const voteCount = finalVoteDoc.votedBy?.length || 0;
+        const voters = finalVoteDoc.votedBy || [];
 
         // Trigger real-time update via Pusher
         console.log('Triggering Pusher update...');
@@ -130,6 +166,7 @@ export async function POST(request: Request) {
         console.error('Vote error:', error);
         return NextResponse.json({ 
             error: 'Failed to update vote',
+            details: error instanceof Error ? error.message : 'Unknown error',
             votes: 0,
             votedBy: []
         }, { status: 500 });

@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense } from 'react'
+import { Suspense, useCallback } from 'react'
 import { useEffect, useState } from 'react'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { pusherClient } from '@/lib/pusher'
 
 interface Restaurant {
   id: string;
@@ -87,7 +88,10 @@ function GroupContent() {
     }
     const urlParams = new URLSearchParams(window.location.search);
     const userParam = urlParams.get('user');
-    return userParam || `TestUser_${Math.random().toString(36).slice(2, 7)}`;
+    if (userParam === 'alice' || userParam === 'bob') {
+      return userParam;
+    }
+    return `TestUser_${Math.random().toString(36).slice(2, 7)}`;
   });
 
   useEffect(() => {
@@ -97,44 +101,87 @@ function GroupContent() {
       const isTestMode = window.location.search.includes('test=true');
 
       if (isTestMode) {
+        const testSessionId = 'test_session_123';
         const testGroupData = {
           name: 'Test Group',
           members: [testUser as string],
-          code: 'test_session_123',
+          code: testSessionId,
           restaurants: [],
           lastUpdated: new Date().toISOString()
         };
 
         try {
-          const response = await fetch(`/api/sessions?code=test_session_123`);
+          console.log('Initializing test mode for user:', testUser);
+          
+          // Only clean up if this is Alice (first test user)
+          if (testUser === 'alice') {
+            console.log('First test user (Alice) - cleaning up previous test data...');
+            const cleanupResponse = await fetch('/api/votes/cleanup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: testSessionId
+              })
+            });
+            
+            if (!cleanupResponse.ok) {
+              console.error('Cleanup failed:', await cleanupResponse.json());
+            }
+
+            // Clear local storage for test mode
+            localStorage.removeItem('group');
+          }
+          
+          console.log('Checking for existing test session...');
+          const response = await fetch(`/api/sessions?code=${testSessionId}`);
           const existingSession = await response.json();
           
-          if (response.ok && existingSession) {
-            // Check if user isn't already in members list
+          if (response.ok && existingSession && !response.status.toString().startsWith('4')) {
+            console.log('Found existing session:', existingSession);
+            
+            // For test users, always join if not already in members
             if (!existingSession.members?.includes(testUser)) {
+              console.log('Joining existing session as:', testUser);
               const updatedSession = {
                 ...existingSession,
-                members: [...(existingSession.members || []), testUser as string],
+                members: [...(existingSession.members || []), testUser as string].filter(Boolean),
                 lastUpdated: new Date().toISOString()
               };
               
-              // Update session with new member
               await fetch('/api/sessions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  code: 'test_session_123',
+                  code: testSessionId,
                   groupData: updatedSession
                 })
               });
               setGroupData(updatedSession);
+              setRestaurants(existingSession.restaurants || []);
             } else {
+              console.log('User already in session:', testUser);
+              // Get fresh vote data for this user
+              const votes = await Promise.all((existingSession.restaurants || []).map(async (r: Restaurant) => {
+                try {
+                  const voteResponse = await fetch(`/api/votes?restaurantId=${r.id}&sessionId=${testSessionId}`);
+                  const voteData = await voteResponse.json();
+                  return {
+                    ...r,
+                    votes: voteData.votes,
+                    votedBy: voteData.votedBy
+                  };
+                } catch (error) {
+                  console.error('Error fetching vote data:', error);
+                  return r;
+                }
+              }));
               setGroupData(existingSession);
+              setRestaurants(votes);
             }
-            setRestaurants(existingSession.restaurants || []);
           } else {
-            // Create new session with first member
-            await fetch('/api/sessions', {
+            // Create new session for first test user
+            console.log('Creating new test session as:', testUser);
+            const createResponse = await fetch('/api/sessions', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -142,12 +189,18 @@ function GroupContent() {
                 groupData: testGroupData
               })
             });
+            
+            if (!createResponse.ok) {
+              throw new Error('Failed to create test session');
+            }
+            
             setGroupData(testGroupData);
             setRestaurants([]);
           }
         } catch (error) {
           console.error('Error with test session:', error);
-          setGroupData(testGroupData);
+          setError('Failed to initialize test session. Please try again.');
+          setGroupData(null);
           setRestaurants([]);
         }
         setIsLoading(false);
@@ -325,20 +378,32 @@ function GroupContent() {
     const updatedRestaurants = [...restaurants, newRestaurant];
     setRestaurants(updatedRestaurants);
 
-    // Update session
+    // Update session and trigger real-time update
     if (groupData) {
         try {
             const timestamp = new Date().toISOString();
+            const updatedGroupData = {
+                ...groupData,
+                restaurants: updatedRestaurants,
+                lastUpdated: timestamp
+            };
+
             await fetch('/api/sessions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     code: groupData.code,
-                    groupData: {
-                        ...groupData,
-                        restaurants: updatedRestaurants,
-                        lastUpdated: timestamp
-                    }
+                    groupData: updatedGroupData
+                })
+            });
+
+            // Trigger Pusher event for real-time update
+            await fetch('/api/pusher/trigger-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId: groupData.code,
+                    restaurants: updatedRestaurants
                 })
             });
         } catch (error) {
@@ -372,11 +437,15 @@ function GroupContent() {
   useEffect(() => {
     if (!groupData?.code) return;
 
-    const syncInterval = setInterval(async () => {
+    let isMounted = true;
+
+    const syncSession = async () => {
         try {
             const response = await fetch(`/api/sessions?code=${groupData.code}`);
             const data = await response.json();
             
+            if (!isMounted) return;
+
             if (response.ok && data.lastUpdated && 
                 (!groupData.lastUpdated || new Date(data.lastUpdated) > new Date(groupData.lastUpdated))) {
                 
@@ -405,50 +474,117 @@ function GroupContent() {
         } catch (error) {
             console.error('Error syncing session:', error);
         }
-    }, 2000);
+    };
 
-    return () => clearInterval(syncInterval);
-  }, [groupData?.code, groupData?.lastUpdated, groupData?.members]);
+    // Initial sync
+    syncSession();
+
+    // Set up interval for periodic sync
+    const syncInterval = setInterval(syncSession, 2000);
+
+    // Subscribe to Pusher channel for real-time updates
+    const channel = pusherClient.subscribe(`session-${groupData.code}`);
+    
+    // Listen for restaurant updates
+    channel.bind('restaurant-update', (data: { restaurants: Restaurant[] }) => {
+        if (!isMounted) return;
+        console.log('Received restaurant update:', data);
+        setRestaurants(data.restaurants);
+        setGroupData(prevData => {
+            if (!prevData) return null;
+            const updatedData = {
+                ...prevData,
+                restaurants: data.restaurants,
+                lastUpdated: new Date().toISOString()
+            };
+            localStorage.setItem('group', JSON.stringify(updatedData));
+            return updatedData;
+        });
+    });
+
+    // Listen for vote updates
+    channel.bind('vote-update', (data: { restaurantId: string; votes: number; votedBy: string[] }) => {
+        if (!isMounted) return;
+        console.log('Received vote update:', data);
+        setRestaurants(prevRestaurants => {
+            const updatedRestaurants = prevRestaurants.map(restaurant => 
+                restaurant.id === data.restaurantId
+                    ? { ...restaurant, votes: data.votes, votedBy: data.votedBy }
+                    : restaurant
+            );
+            
+            // Update group data with the new restaurants
+            setGroupData(prevData => {
+                if (!prevData) return null;
+                const updatedData = {
+                    ...prevData,
+                    restaurants: updatedRestaurants,
+                    lastUpdated: new Date().toISOString()
+                };
+                localStorage.setItem('group', JSON.stringify(updatedData));
+                return updatedData;
+            });
+            
+            return updatedRestaurants;
+        });
+    });
+
+    return () => {
+        console.log('Cleaning up Pusher subscription and sync interval');
+        isMounted = false;
+        clearInterval(syncInterval);
+        pusherClient.unsubscribe(`session-${groupData.code}`);
+    };
+  }, [groupData?.code, groupData?.lastUpdated, groupData?.members]); // Include all dependencies
 
   const handleVote = async (restaurantId: string) => {
     if (!groupData) return;
 
-    // Get current restaurant votes
-    const currentRestaurants = [...restaurants];
-    const voterName = groupData.members[0];
+    // Clean the user name to prevent escape characters
+    const voterName = (testUser || groupData.members[0])?.replace(/[\\'"]/g, '');
 
-    // Find the restaurant to update
-    const restaurantToUpdate = currentRestaurants.find(r => r.id === restaurantId);
-    if (restaurantToUpdate) {
-        // Initialize votedBy array if it doesn't exist
-        if (!restaurantToUpdate.votedBy) {
-            restaurantToUpdate.votedBy = [];
-        }
-        
-        // Add new vote if user hasn't voted for this restaurant yet
-        if (!restaurantToUpdate.votedBy.includes(voterName)) {
-            restaurantToUpdate.votedBy.push(voterName);
-            restaurantToUpdate.votes = restaurantToUpdate.votedBy.length;
-        }
-    }
-
-    setRestaurants(currentRestaurants);
-
-    // Update session with new votes
     try {
-        const timestamp = new Date().toISOString();
-        await fetch('/api/sessions', {
+        // Call the votes API
+        const response = await fetch('/api/votes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                code: groupData.code,
-                groupData: {
-                    ...groupData,
-                    restaurants: currentRestaurants,
-                    lastUpdated: timestamp
-                }
+                restaurantId,
+                sessionId: groupData.code,
+                userId: voterName
             })
         });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            console.error('Vote error:', data.error);
+            return;
+        }
+
+        // Update local state with the new vote data
+        const updatedRestaurants = restaurants.map(restaurant => {
+            if (restaurant.id === restaurantId) {
+                return {
+                    ...restaurant,
+                    votes: data.votes,
+                    votedBy: data.votedBy
+                };
+            }
+            return restaurant;
+        });
+
+        setRestaurants(updatedRestaurants);
+
+        // Update group data
+        const updatedGroupData = {
+            ...groupData,
+            restaurants: updatedRestaurants,
+            lastUpdated: new Date().toISOString()
+        };
+        setGroupData(updatedGroupData);
+        localStorage.setItem('group', JSON.stringify(updatedGroupData));
+
     } catch (error) {
         console.error('Error updating votes:', error);
     }
@@ -490,11 +626,16 @@ function GroupContent() {
   };
 
   // Add this function to calculate total votes
-  const getTotalVotes = () => {
-    return restaurants.reduce((total, restaurant) => {
-      return total + (restaurant.votedBy?.length || 0);
+  const getTotalVotes = useCallback(() => {
+    console.log('Calculating total votes for restaurants:', restaurants);
+    const total = restaurants.reduce((total, restaurant) => {
+      const votes = restaurant.votedBy?.length || 0;
+      console.log(`Restaurant ${restaurant.name}: ${votes} votes`);
+      return total + votes;
     }, 0);
-  };
+    console.log('Total votes:', total);
+    return total;
+  }, [restaurants]);
 
   if (!isClient || isLoading) {
     return (

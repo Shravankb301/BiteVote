@@ -2,6 +2,24 @@ import { NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 import { MongoClient } from 'mongodb';
 
+interface GroupData {
+    name: string;
+    members: string[];
+    code: string;
+    restaurants?: Array<{
+        id: string;
+        name: string;
+        cuisine: string;
+        rating: number;
+        priceRange: string;
+        dietary: string[];
+        votes?: number;
+        votedBy?: string[];
+    }>;
+    lastUpdated: string;
+    _id?: string;
+}
+
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -56,9 +74,13 @@ export async function POST(request: Request) {
         ]) as MongoClient;
 
         const db = client.db('team-lunch-decider');
+        
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { _id, ...groupDataToSave } = groupData as GroupData;
+        
         await db.collection('sessions').updateOne(
             { code },
-            { $set: groupData },
+            { $set: groupDataToSave },
             { upsert: true, maxTimeMS: 5000 }
         );
 
