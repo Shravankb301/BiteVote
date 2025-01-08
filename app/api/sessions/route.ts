@@ -20,6 +20,13 @@ interface GroupData {
     _id?: string;
 }
 
+const corsHeaders = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
 const getMongoClient = async (retries = 3): Promise<MongoClient> => {
     try {
         const client = await clientPromise;
@@ -48,7 +55,10 @@ export async function GET(request: Request) {
 
         if (!code) {
             console.error('No code provided in request');
-            return NextResponse.json({ error: 'Code parameter is required' }, { status: 400 });
+            return NextResponse.json(
+                { error: 'Code parameter is required' },
+                { status: 400, headers: corsHeaders }
+            );
         }
 
         const client = await getMongoClient();
@@ -66,10 +76,10 @@ export async function GET(request: Request) {
                 error: 'Session not found',
                 code,
                 timestamp: new Date().toISOString()
-            }, { status: 404 });
+            }, { status: 404, headers: corsHeaders });
         }
 
-        return NextResponse.json(session);
+        return NextResponse.json(session, { headers: corsHeaders });
     } catch (error) {
         console.error('Sessions API Error:', error);
         return NextResponse.json(
@@ -78,7 +88,7 @@ export async function GET(request: Request) {
                 details: error instanceof Error ? error.message : 'Unknown error',
                 timestamp: new Date().toISOString()
             },
-            { status: 500 }
+            { status: 500, headers: corsHeaders }
         );
     }
 }
@@ -95,7 +105,7 @@ export async function POST(request: Request) {
             console.error('Missing required fields:', { code: !!code, groupData: !!groupData });
             return NextResponse.json(
                 { error: 'Code and groupData are required' },
-                { status: 400 }
+                { status: 400, headers: corsHeaders }
             );
         }
 
@@ -130,7 +140,7 @@ export async function POST(request: Request) {
             success: true,
             timestamp: new Date().toISOString(),
             operation: result.upsertedId ? 'created' : 'updated'
-        });
+        }, { headers: corsHeaders });
     } catch (error) {
         console.error('Sessions API Error:', error);
         return NextResponse.json(
@@ -139,7 +149,11 @@ export async function POST(request: Request) {
                 details: error instanceof Error ? error.message : 'Unknown error',
                 timestamp: new Date().toISOString()
             },
-            { status: 500 }
+            { status: 500, headers: corsHeaders }
         );
     }
+}
+
+export async function OPTIONS() {
+    return NextResponse.json({}, { headers: corsHeaders });
 } 

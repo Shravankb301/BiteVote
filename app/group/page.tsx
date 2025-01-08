@@ -440,8 +440,18 @@ function GroupContent() {
     let isMounted = true;
 
     const syncSession = async () => {
+        if (!groupData) return; // Early return if no groupData
+
         try {
             const response = await fetch(`/api/sessions?code=${groupData.code}`);
+            
+            // Check if response is ok and is JSON
+            const contentType = response.headers.get('content-type');
+            if (!contentType?.includes('application/json')) {
+                console.error('Non-JSON response received:', await response.text());
+                return;
+            }
+
             const data = await response.json();
             
             if (!isMounted) return;
@@ -470,9 +480,28 @@ function GroupContent() {
                 setGroupData(updatedData);
                 setRestaurants(updatedData.restaurants);
                 localStorage.setItem('group', JSON.stringify(updatedData));
+            } else if (!response.ok) {
+                console.error('Error syncing session:', data.error || 'Unknown error');
+                if (response.status === 404) {
+                    // Handle session not found
+                    console.log('Session not found, creating new one...');
+                    await fetch('/api/sessions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            code: groupData.code,
+                            groupData: {
+                                ...groupData,
+                                lastUpdated: new Date().toISOString()
+                            }
+                        })
+                    });
+                }
             }
         } catch (error) {
             console.error('Error syncing session:', error);
+            // Don't throw the error, just log it and continue
+            // This prevents the app from crashing on temporary network issues
         }
     };
 
@@ -535,7 +564,7 @@ function GroupContent() {
         clearInterval(syncInterval);
         pusherClient.unsubscribe(`session-${groupData.code}`);
     };
-  }, [groupData?.code, groupData?.lastUpdated, groupData?.members]); // Include all dependencies
+  }, [groupData]); // Simplified dependency array to just include groupData
 
   const handleVote = async (restaurantId: string) => {
     if (!groupData) return;
