@@ -123,71 +123,102 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
     setError(null);
 
     try {
-      console.log('Submitting vote for restaurant:', restaurantId);
-      const response = await fetch('/api/votes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          restaurantId,
-          sessionId,
-          userId: currentUser
-        }),
-      });
+        console.log('1. Starting vote submission:', { restaurantId, sessionId, currentUser });
+        
+        // Prepare request body
+        const requestBody = JSON.stringify({
+            restaurantId,
+            sessionId,
+            userId: currentUser
+        });
+        console.log('2. Request body prepared:', requestBody);
 
-      let data;
-      try {
-        const textResponse = await response.text();
-        data = JSON.parse(textResponse);
-      } catch (parseError) {
-        console.error('Failed to parse response:', parseError);
-        throw new Error('Server returned invalid response format');
-      }
-      
-      if (!response.ok) {
-        console.error('Vote error:', data.error);
-        if (data.error === 'Already voted') {
-          toast({
-            title: "Already Voted",
-            description: "You have already voted for a restaurant in this session.",
-            variant: "destructive"
-          });
-        } else {
-          setError(data.error || 'Failed to vote');
+        // Make the request
+        console.log('3. Sending POST request to /api/votes');
+        const response = await fetch('/api/votes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: requestBody,
+        });
+        console.log('4. Received response:', {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries())
+        });
+
+        // Try to get the raw response text first
+        const rawResponse = await response.text();
+        console.log('5. Raw response text:', rawResponse);
+
+        // Try to parse the response
+        let data;
+        try {
+            data = JSON.parse(rawResponse);
+            console.log('6. Successfully parsed response:', data);
+        } catch (parseError) {
+            console.error('7. Failed to parse response:', {
+                parseError,
+                rawResponse
+            });
+            throw new Error('Server returned invalid response format');
         }
-        return;
-      }
 
-      console.log('Vote successful:', data);
-      // Update local state with the server response
-      setVotes(prev => ({
-        ...prev,
-        [restaurantId]: data.votes
-      }));
-      setVotedRestaurants(prev => ({
-        ...prev,
-        [restaurantId]: data.votedBy
-      }));
+        if (!response.ok) {
+            console.error('8. Response not OK:', data);
+            if (data.error === 'Already voted') {
+                toast({
+                    title: "Already Voted",
+                    description: "You have already voted for a restaurant in this session.",
+                    variant: "destructive"
+                });
+            } else {
+                setError(data.error || 'Failed to vote');
+            }
+            return;
+        }
 
-      toast({
-        title: "Vote Recorded",
-        description: "Your vote has been successfully recorded.",
-      });
+        console.log('9. Vote successful:', data);
+        
+        // Update local state
+        setVotes(prev => ({
+            ...prev,
+            [restaurantId]: data.votes
+        }));
+        setVotedRestaurants(prev => ({
+            ...prev,
+            [restaurantId]: data.votedBy
+        }));
 
-      if (onVote) {
-        onVote(restaurantId);
-      }
+        console.log('10. Local state updated:', {
+            votes: data.votes,
+            votedBy: data.votedBy
+        });
+
+        toast({
+            title: "Vote Recorded",
+            description: "Your vote has been successfully recorded.",
+        });
+
+        if (onVote) {
+            onVote(restaurantId);
+        }
     } catch (error) {
-      console.error('Error voting:', error);
-      setError(error instanceof Error ? error.message : 'Failed to vote');
-      toast({
-        title: "Error",
-        description: "Failed to record your vote. Please try again.",
-        variant: "destructive"
-      });
+        console.error('Vote error:', {
+            error,
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined
+        });
+        
+        setError(error instanceof Error ? error.message : 'Failed to vote');
+        toast({
+            title: "Error",
+            description: "Failed to record your vote. Please try again.",
+            variant: "destructive"
+        });
     } finally {
-      setVotingInProgress(null);
+        setVotingInProgress(null);
     }
   };
 
