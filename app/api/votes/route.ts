@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '@/lib/mongodb';
+import clientPromise, { checkConnection, reconnect } from '@/lib/mongodb';
 import { pusherServer } from '@/lib/pusher';
 import { MongoClient, Document } from 'mongodb';
 
@@ -8,6 +8,24 @@ interface VoteDocument extends Document {
     sessionId: string;
     votedBy: string[];
 }
+
+const getMongoClient = async (retries = 3): Promise<MongoClient> => {
+    try {
+        const client = await clientPromise;
+        const isConnected = await checkConnection();
+        if (!isConnected) {
+            throw new Error('MongoDB connection check failed');
+        }
+        return client;
+    } catch (error) {
+        if (retries > 0) {
+            console.log(`Retrying MongoDB connection... (${retries} attempts left)`);
+            await reconnect();
+            return getMongoClient(retries - 1);
+        }
+        throw error;
+    }
+};
 
 export async function GET(request: Request) {
     try {
@@ -19,13 +37,7 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
         }
 
-        const client = await Promise.race([
-            clientPromise,
-            new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Connection timeout')), 5000)
-            )
-        ]) as MongoClient;
-
+        const client = await getMongoClient();
         const db = client.db('team-lunch-decider');
         
         const vote = await db.collection<VoteDocument>('votes').findOne({
@@ -60,14 +72,9 @@ export async function POST(request: Request) {
         }
 
         console.log('Connecting to MongoDB...');
-        const client = await Promise.race([
-            clientPromise,
-            new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Connection timeout')), 5000)
-            )
-        ]) as MongoClient;
-
+        const client = await getMongoClient();
         console.log('Connected to MongoDB');
+        
         const db = client.db('team-lunch-decider');
         const votesCollection = db.collection<VoteDocument>('votes');
 
