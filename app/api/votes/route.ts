@@ -89,16 +89,13 @@ export async function POST(request: Request) {
 
         if (!restaurantId || !sessionId || !userId) {
             console.error('Missing parameters:', { restaurantId, sessionId, userId });
-            return new NextResponse(
-                JSON.stringify({ 
-                    error: 'Missing parameters',
-                    details: { restaurantId, sessionId, userId }
-                }), 
-                { 
-                    status: 400,
-                    headers: corsHeaders
-                }
-            );
+            return NextResponse.json({ 
+                error: 'Missing parameters',
+                details: { restaurantId, sessionId, userId }
+            }, { 
+                status: 400,
+                headers: corsHeaders
+            });
         }
 
         console.log('Connecting to MongoDB...');
@@ -118,57 +115,59 @@ export async function POST(request: Request) {
 
         if (existingVote) {
             console.log('User has already voted for this restaurant');
-            return new NextResponse(
-                JSON.stringify({ 
-                    error: 'Already voted',
-                    votes: existingVote.votedBy.length,
-                    votedBy: existingVote.votedBy
-                }), 
-                { 
-                    status: 400,
-                    headers: corsHeaders
-                }
-            );
+            return NextResponse.json({ 
+                error: 'Already voted',
+                votes: existingVote.votedBy.length,
+                votedBy: existingVote.votedBy
+            }, { 
+                status: 400,
+                headers: corsHeaders
+            });
         }
 
-        // Use findOneAndUpdate for atomic operation
-        console.log('Updating vote document...');
-        const result = await votesCollection.findOneAndUpdate(
-            { restaurantId, sessionId },
-            { 
-                $setOnInsert: {
-                    restaurantId,
-                    sessionId,
-                },
-                $addToSet: { 
-                    votedBy: userId 
-                }
-            },
-            { 
-                upsert: true, 
-                returnDocument: 'after',
-                maxTimeMS: 5000
+        // First find the current document
+        const currentDoc = await votesCollection.findOne({ 
+            restaurantId, 
+            sessionId 
+        });
+
+        let updatedDoc;
+        if (!currentDoc) {
+            // Insert new document if none exists
+            const insertResult = await votesCollection.insertOne({
+                restaurantId,
+                sessionId,
+                votedBy: [userId]
+            });
+            
+            if (!insertResult.acknowledged) {
+                throw new Error('Failed to insert vote document');
             }
-        );
 
-        console.log('MongoDB update result:', result);
-
-        if (!result) {
-            console.error('Failed to update vote document:', result);
-            return new NextResponse(
-                JSON.stringify({ 
-                    error: 'Failed to update vote',
-                    details: 'No document returned after update'
-                }), 
-                { 
-                    status: 500,
-                    headers: corsHeaders
-                }
+            updatedDoc = {
+                restaurantId,
+                sessionId,
+                votedBy: [userId]
+            };
+        } else {
+            // Update existing document
+            const updateResult = await votesCollection.updateOne(
+                { restaurantId, sessionId },
+                { $addToSet: { votedBy: userId } }
             );
+
+            if (!updateResult.acknowledged) {
+                throw new Error('Failed to update vote document');
+            }
+
+            updatedDoc = {
+                ...currentDoc,
+                votedBy: [...(currentDoc.votedBy || []), userId]
+            };
         }
 
-        const voteCount = result.votedBy?.length || 0;
-        const voters = result.votedBy || [];
+        const voteCount = updatedDoc.votedBy.length;
+        const voters = updatedDoc.votedBy;
 
         console.log('Vote recorded successfully:', {
             restaurantId,
@@ -197,36 +196,29 @@ export async function POST(request: Request) {
             // Continue since the vote was successful
         }
 
-        return new NextResponse(
-            JSON.stringify({ 
-                success: true,
-                votes: voteCount,
-                votedBy: voters
-            }), 
-            {
-                headers: corsHeaders
-            }
-        );
+        return NextResponse.json({ 
+            success: true,
+            votes: voteCount,
+            votedBy: voters
+        }, {
+            headers: corsHeaders
+        });
     } catch (error) {
         console.error('Vote error:', error);
-        // Log more details about the error
         if (error instanceof Error) {
             console.error('Error name:', error.name);
             console.error('Error message:', error.message);
             console.error('Error stack:', error.stack);
         }
-        return new NextResponse(
-            JSON.stringify({ 
-                error: 'Failed to process vote',
-                details: error instanceof Error ? error.message : 'Unknown error',
-                votes: 0,
-                votedBy: []
-            }), 
-            { 
-                status: 500,
-                headers: corsHeaders
-            }
-        );
+        return NextResponse.json({ 
+            error: 'Failed to process vote',
+            details: error instanceof Error ? error.message : 'Unknown error',
+            votes: 0,
+            votedBy: []
+        }, { 
+            status: 500,
+            headers: corsHeaders
+        });
     }
 }
 
