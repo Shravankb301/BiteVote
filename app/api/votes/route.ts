@@ -19,15 +19,27 @@ const corsHeaders = {
 // Simplified MongoDB client getter with shorter timeouts
 const getMongoClient = async (): Promise<MongoClient> => {
     try {
-        const client = await clientPromise;
-        const isConnected = await checkConnection();
+        const client = await Promise.race([
+            clientPromise,
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('MongoDB connection timeout')), 3000)
+            )
+        ]) as MongoClient;
+
+        const isConnected = await Promise.race([
+            checkConnection(),
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('MongoDB health check timeout')), 2000)
+            )
+        ]) as boolean;
+
         if (!isConnected) {
             throw new Error('MongoDB connection check failed');
         }
         return client;
     } catch (error) {
         console.error('MongoDB connection error:', error);
-        throw error;
+        throw new Error('Database connection failed');
     }
 };
 
@@ -36,12 +48,15 @@ async function ensureIndexes() {
     try {
         const client = await getMongoClient();
         const db = client.db('team-lunch-decider');
+        
+        // Create compound index for vote lookups
         await db.collection('votes').createIndex(
-            { sessionId: 1, restaurantId: 1 },
-            { unique: true }
-        );
-        await db.collection('votes').createIndex(
-            { sessionId: 1, "votedBy": 1 }
+            { sessionId: 1, restaurantId: 1, votedBy: 1 },
+            { 
+                unique: false,
+                background: true,
+                name: 'vote_lookup_index'
+            }
         );
     } catch (error) {
         console.error('Failed to create indexes:', error);
@@ -96,14 +111,31 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+    let client: MongoClient | null = null;
+    
     try {
-        // Safely parse the request body
+        // 1. Input Validation
         let body;
         try {
-            body = await request.json();
-        } catch {
+            const text = await request.text();
+            try {
+                body = JSON.parse(text);
+            } catch (e) {
+                console.error('JSON Parse Error:', e, 'Raw text:', text);
+                return NextResponse.json({ 
+                    error: 'Invalid JSON format',
+                    details: 'The request body is not valid JSON',
+                    votes: 0,
+                    votedBy: []
+                }, { 
+                    status: 400,
+                    headers: corsHeaders 
+                });
+            }
+        } catch (e) {
+            console.error('Request body read error:', e);
             return NextResponse.json({ 
-                error: 'Invalid request format',
+                error: 'Failed to read request body',
                 votes: 0,
                 votedBy: []
             }, { 
@@ -114,9 +146,10 @@ export async function POST(request: Request) {
 
         const { restaurantId, sessionId, userId } = body;
 
-        if (!restaurantId || !sessionId || !userId) {
+        // 2. Parameter Validation
+        if (!restaurantId || typeof restaurantId !== 'string') {
             return NextResponse.json({ 
-                error: 'Missing parameters',
+                error: 'Invalid restaurantId',
                 votes: 0,
                 votedBy: []
             }, { 
@@ -125,64 +158,114 @@ export async function POST(request: Request) {
             });
         }
 
-        const client = await getMongoClient();
-        const db = client.db('team-lunch-decider');
-        const votesCollection = db.collection<VoteDocument>('votes');
-
-        // Use updateOne for the vote operation
-        const result = await votesCollection.updateOne(
-            { 
-                restaurantId, 
-                sessionId,
-                votedBy: { $ne: userId } // Only update if user hasn't voted
-            },
-            { 
-                $addToSet: { votedBy: userId }
-            },
-            { 
-                upsert: true,
-                maxTimeMS: 5000
-            }
-        );
-
-        // If no document was modified, check if user has already voted
-        if (result.matchedCount === 0 && result.upsertedCount === 0) {
-            const existingVote = await votesCollection.findOne(
-                { sessionId, votedBy: userId },
-                { maxTimeMS: 2000 }
-            );
-
-            if (existingVote) {
-                return NextResponse.json({ 
-                    error: 'Already voted',
-                    votes: existingVote.votedBy.length,
-                    votedBy: existingVote.votedBy
-                }, { 
-                    status: 400,
-                    headers: corsHeaders 
-                });
-            }
-
-            // If we get here, something went wrong with the update
-            throw new Error('Vote operation failed');
+        if (!sessionId || typeof sessionId !== 'string') {
+            return NextResponse.json({ 
+                error: 'Invalid sessionId',
+                votes: 0,
+                votedBy: []
+            }, { 
+                status: 400,
+                headers: corsHeaders 
+            });
         }
 
-        // Get the updated document
-        const updatedDoc = await votesCollection.findOne(
-            { restaurantId, sessionId },
-            { maxTimeMS: 2000 }
-        );
-
-        if (!updatedDoc) {
-            throw new Error('Failed to retrieve updated vote');
+        if (!userId || typeof userId !== 'string') {
+            return NextResponse.json({ 
+                error: 'Invalid userId',
+                votes: 0,
+                votedBy: []
+            }, { 
+                status: 400,
+                headers: corsHeaders 
+            });
         }
 
-        const votes = updatedDoc.votedBy.length;
-        const votedBy = updatedDoc.votedBy;
+        // 3. Database Operations with Retries
+        const maxRetries = 2;
+        let retryCount = 0;
+        let votes = 0;
+        let votedBy: string[] = [];
 
-        // Fire and forget Pusher update
-        Promise.resolve().then(() => {
-            pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
+        while (retryCount <= maxRetries) {
+            try {
+                client = await getMongoClient();
+                const db = client.db('team-lunch-decider');
+                const votesCollection = db.collection<VoteDocument>('votes');
+
+                // First, try to find an existing vote
+                const existingVote = await votesCollection.findOne(
+                    { 
+                        sessionId,
+                        restaurantId,
+                        votedBy: userId 
+                    },
+                    { 
+                        maxTimeMS: 2000,
+                        projection: { votedBy: 1 }
+                    }
+                );
+
+                if (existingVote) {
+                    return NextResponse.json({ 
+                        error: 'Already voted',
+                        votes: existingVote.votedBy.length,
+                        votedBy: existingVote.votedBy
+                    }, { 
+                        status: 400,
+                        headers: corsHeaders 
+                    });
+                }
+
+                // Perform the atomic update
+                const updateResult = await votesCollection.updateOne(
+                    { 
+                        restaurantId,
+                        sessionId
+                    },
+                    { 
+                        $addToSet: { votedBy: userId }
+                    },
+                    { 
+                        upsert: true,
+                        maxTimeMS: 3000
+                    }
+                );
+
+                if (!updateResult.acknowledged) {
+                    throw new Error('Vote update not acknowledged');
+                }
+
+                // Get the updated document
+                const updatedDoc = await votesCollection.findOne(
+                    { restaurantId, sessionId },
+                    { maxTimeMS: 2000 }
+                );
+
+                if (!updatedDoc) {
+                    throw new Error('Failed to retrieve updated vote');
+                }
+
+                votes = updatedDoc.votedBy.length;
+                votedBy = updatedDoc.votedBy;
+
+                // Success - break the retry loop
+                break;
+            } catch (error) {
+                retryCount++;
+                console.error(`Vote operation attempt ${retryCount} failed:`, error);
+                
+                if (retryCount > maxRetries) {
+                    throw new Error(`Vote operation failed after ${maxRetries} retries`);
+                }
+                
+                // Wait before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 500));
+            }
+        }
+
+        // 4. Pusher Update (non-blocking)
+        void Promise.resolve().then(() => {
+            return pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
                 restaurantId,
                 votes,
                 votedBy
@@ -191,18 +274,29 @@ export async function POST(request: Request) {
             });
         });
 
+        // 5. Return Success Response
         return NextResponse.json({ 
             success: true,
             votes,
             votedBy
         }, { 
-            headers: corsHeaders 
+            headers: {
+                ...corsHeaders,
+                'Cache-Control': 'no-store, no-cache, must-revalidate'
+            }
         });
     } catch (error) {
-        console.error('POST /api/votes - Error:', error);
+        // 6. Error Handling
+        console.error('POST /api/votes - Error:', {
+            error,
+            message: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined
+        });
+
         // Ensure we always return a valid JSON response
         return NextResponse.json({ 
             error: error instanceof Error ? error.message : 'Failed to process vote',
+            details: 'An unexpected error occurred while processing your vote',
             votes: 0,
             votedBy: []
         }, { 
