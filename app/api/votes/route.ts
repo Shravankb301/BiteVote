@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { checkConnection } from '@/lib/mongodb';
+import clientPromise from '@/lib/mongodb';
 import { pusherServer } from '@/lib/pusher';
-import { MongoClient } from 'mongodb';
 
 interface VoteDocument {
     restaurantId: string;
@@ -71,26 +70,63 @@ export async function POST(request: Request) {
             });
         }
 
+        console.log('Connecting to MongoDB...');
         const client = await clientPromise;
         const db = client.db('team-lunch-decider');
         const votesCollection = db.collection<VoteDocument>('votes');
 
-        // Create or update vote document
-        console.log('Creating/updating vote document...');
-        const updateResult = await votesCollection.updateOne(
-            { 
+        // First check if user has already voted
+        console.log('Checking if user has already voted...');
+        const existingVote = await votesCollection.findOne({
+            restaurantId,
+            sessionId,
+            votedBy: userId
+        });
+
+        if (existingVote) {
+            console.log('User has already voted for this restaurant');
+            return NextResponse.json({ 
+                error: 'Already voted',
+                votes: existingVote.votedBy.length,
+                votedBy: existingVote.votedBy
+            }, { 
+                status: 400,
+                headers: corsHeaders
+            });
+        }
+
+        // First, try to find an existing vote document
+        const currentVote = await votesCollection.findOne({
+            restaurantId,
+            sessionId
+        });
+
+        let updateResult;
+        if (!currentVote) {
+            // If no vote document exists, create a new one
+            console.log('Creating new vote document...');
+            updateResult = await votesCollection.insertOne({
                 restaurantId,
-                sessionId
-            },
-            { 
-                $addToSet: { 
-                    votedBy: userId 
+                sessionId,
+                votedBy: [userId]
+            });
+        } else {
+            // If vote document exists, add the user's vote
+            console.log('Updating existing vote document...');
+            updateResult = await votesCollection.updateOne(
+                { 
+                    restaurantId,
+                    sessionId
+                },
+                { 
+                    $push: { 
+                        votedBy: userId 
+                    }
                 }
-            },
-            { 
-                upsert: true
-            }
-        );
+            );
+        }
+
+        console.log('Update result:', updateResult);
 
         if (!updateResult.acknowledged) {
             console.error('Vote update not acknowledged');
@@ -98,6 +134,7 @@ export async function POST(request: Request) {
         }
 
         // Get the updated vote count
+        console.log('Fetching updated vote document...');
         const updatedVote = await votesCollection.findOne({
             restaurantId,
             sessionId
@@ -113,12 +150,15 @@ export async function POST(request: Request) {
 
         console.log('Vote recorded successfully:', {
             restaurantId,
+            sessionId,
+            userId,
             voteCount,
             voters
         });
 
         // Trigger real-time update
         try {
+            console.log('Triggering Pusher update...');
             await pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
                 restaurantId,
                 votes: voteCount,
@@ -139,6 +179,12 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error('Vote error:', error);
+        // Log more details about the error
+        if (error instanceof Error) {
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+        }
         return NextResponse.json({ 
             error: 'Failed to process vote',
             details: error instanceof Error ? error.message : 'Unknown error',

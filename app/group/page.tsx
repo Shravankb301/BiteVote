@@ -567,7 +567,7 @@ function GroupContent() {
         clearInterval(syncInterval);
         pusherClient.unsubscribe(`session-${groupData.code}`);
     };
-  }, [groupData]); // Simplified dependency array to just include groupData
+  }, [groupData, toast]);
 
   const handleVote = async (restaurantId: string) => {
     if (!groupData) return;
