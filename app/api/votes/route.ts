@@ -97,7 +97,21 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
     try {
-        const body = await request.json().catch(() => ({}));
+        // Safely parse the request body
+        let body;
+        try {
+            body = await request.json();
+        } catch {
+            return NextResponse.json({ 
+                error: 'Invalid request format',
+                votes: 0,
+                votedBy: []
+            }, { 
+                status: 400,
+                headers: corsHeaders 
+            });
+        }
+
         const { restaurantId, sessionId, userId } = body;
 
         if (!restaurantId || !sessionId || !userId) {
@@ -115,26 +129,13 @@ export async function POST(request: Request) {
         const db = client.db('team-lunch-decider');
         const votesCollection = db.collection<VoteDocument>('votes');
 
-        // Check if user has already voted in this session using the index
-        const existingVote = await votesCollection.findOne(
-            { sessionId, votedBy: userId },
-            { maxTimeMS: 3000 }
-        );
-
-        if (existingVote) {
-            return NextResponse.json({ 
-                error: 'Already voted',
-                votes: existingVote.votedBy.length,
-                votedBy: existingVote.votedBy
-            }, { 
-                status: 400,
-                headers: corsHeaders 
-            });
-        }
-
-        // Add the vote with a single atomic operation
+        // Use updateOne for the vote operation
         const result = await votesCollection.updateOne(
-            { restaurantId, sessionId },
+            { 
+                restaurantId, 
+                sessionId,
+                votedBy: { $ne: userId } // Only update if user hasn't voted
+            },
             { 
                 $addToSet: { votedBy: userId }
             },
@@ -144,8 +145,26 @@ export async function POST(request: Request) {
             }
         );
 
-        if (!result.acknowledged) {
-            throw new Error('Vote update failed');
+        // If no document was modified, check if user has already voted
+        if (result.matchedCount === 0 && result.upsertedCount === 0) {
+            const existingVote = await votesCollection.findOne(
+                { sessionId, votedBy: userId },
+                { maxTimeMS: 2000 }
+            );
+
+            if (existingVote) {
+                return NextResponse.json({ 
+                    error: 'Already voted',
+                    votes: existingVote.votedBy.length,
+                    votedBy: existingVote.votedBy
+                }, { 
+                    status: 400,
+                    headers: corsHeaders 
+                });
+            }
+
+            // If we get here, something went wrong with the update
+            throw new Error('Vote operation failed');
         }
 
         // Get the updated document
@@ -162,12 +181,14 @@ export async function POST(request: Request) {
         const votedBy = updatedDoc.votedBy;
 
         // Fire and forget Pusher update
-        pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
-            restaurantId,
-            votes,
-            votedBy
-        }).catch(error => {
-            console.error('Pusher error:', error);
+        Promise.resolve().then(() => {
+            pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
+                restaurantId,
+                votes,
+                votedBy
+            }).catch(error => {
+                console.error('Pusher error:', error);
+            });
         });
 
         return NextResponse.json({ 
@@ -179,8 +200,9 @@ export async function POST(request: Request) {
         });
     } catch (error) {
         console.error('POST /api/votes - Error:', error);
+        // Ensure we always return a valid JSON response
         return NextResponse.json({ 
-            error: 'Failed to process vote',
+            error: error instanceof Error ? error.message : 'Failed to process vote',
             votes: 0,
             votedBy: []
         }, { 
