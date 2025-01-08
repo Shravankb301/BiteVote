@@ -89,10 +89,16 @@ export async function POST(request: Request) {
 
         if (!restaurantId || !sessionId || !userId) {
             console.error('Missing parameters:', { restaurantId, sessionId, userId });
-            return NextResponse.json({ error: 'Missing parameters' }, { 
-                status: 400,
-                headers: corsHeaders
-            });
+            return new NextResponse(
+                JSON.stringify({ 
+                    error: 'Missing parameters',
+                    details: { restaurantId, sessionId, userId }
+                }), 
+                { 
+                    status: 400,
+                    headers: corsHeaders
+                }
+            );
         }
 
         console.log('Connecting to MongoDB...');
@@ -112,14 +118,17 @@ export async function POST(request: Request) {
 
         if (existingVote) {
             console.log('User has already voted for this restaurant');
-            return NextResponse.json({ 
-                error: 'Already voted',
-                votes: existingVote.votedBy.length,
-                votedBy: existingVote.votedBy
-            }, { 
-                status: 400,
-                headers: corsHeaders
-            });
+            return new NextResponse(
+                JSON.stringify({ 
+                    error: 'Already voted',
+                    votes: existingVote.votedBy.length,
+                    votedBy: existingVote.votedBy
+                }), 
+                { 
+                    status: 400,
+                    headers: corsHeaders
+                }
+            );
         }
 
         // Use findOneAndUpdate for atomic operation
@@ -142,15 +151,20 @@ export async function POST(request: Request) {
             }
         );
 
+        console.log('MongoDB update result:', result);
+
         if (!result) {
             console.error('Failed to update vote document:', result);
-            return NextResponse.json({ 
-                error: 'Failed to update vote',
-                details: 'No document returned after update'
-            }, { 
-                status: 500,
-                headers: corsHeaders
-            });
+            return new NextResponse(
+                JSON.stringify({ 
+                    error: 'Failed to update vote',
+                    details: 'No document returned after update'
+                }), 
+                { 
+                    status: 500,
+                    headers: corsHeaders
+                }
+            );
         }
 
         const voteCount = result.votedBy?.length || 0;
@@ -183,13 +197,16 @@ export async function POST(request: Request) {
             // Continue since the vote was successful
         }
 
-        return NextResponse.json({ 
-            success: true,
-            votes: voteCount,
-            votedBy: voters
-        }, {
-            headers: corsHeaders
-        });
+        return new NextResponse(
+            JSON.stringify({ 
+                success: true,
+                votes: voteCount,
+                votedBy: voters
+            }), 
+            {
+                headers: corsHeaders
+            }
+        );
     } catch (error) {
         console.error('Vote error:', error);
         // Log more details about the error
@@ -198,15 +215,18 @@ export async function POST(request: Request) {
             console.error('Error message:', error.message);
             console.error('Error stack:', error.stack);
         }
-        return NextResponse.json({ 
-            error: 'Failed to process vote',
-            details: error instanceof Error ? error.message : 'Unknown error',
-            votes: 0,
-            votedBy: []
-        }, { 
-            status: 500,
-            headers: corsHeaders
-        });
+        return new NextResponse(
+            JSON.stringify({ 
+                error: 'Failed to process vote',
+                details: error instanceof Error ? error.message : 'Unknown error',
+                votes: 0,
+                votedBy: []
+            }), 
+            { 
+                status: 500,
+                headers: corsHeaders
+            }
+        );
     }
 }
 
