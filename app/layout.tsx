@@ -1,11 +1,14 @@
 import './globals.css'
-import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Toaster } from "@/components/ui/toaster"
+import { initializeDatabase } from '@/lib/db-indexes'
 
 const inter = Inter({ subsets: ['latin'] })
 
-export const metadata: Metadata = {
+// Initialize database indexes
+initializeDatabase().catch(console.error);
+
+export const metadata = {
   title: 'Team Lunch Decider',
   description: 'Decide where to eat as a team',
 }

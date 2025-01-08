@@ -1,11 +1,10 @@
-import { MongoClient } from 'mongodb';
+import { MongoClient, MongoClientOptions, WriteConcernSettings } from 'mongodb';
 
 if (!process.env.MONGODB_URI) {
-  throw new Error('Please add your Mongodb URI to .env.local');
+  throw new Error('Please add your MongoDB URI to .env.local');
 }
 
 const uri = process.env.MONGODB_URI;
-console.log('MongoDB URI configured:', { uri: uri.substring(0, 20) + '...' });
 
 // Add type declaration for global MongoDB client
 declare global {
@@ -13,18 +12,20 @@ declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined;
 }
 
-// Optimized options for better connection handling
-const options = {
+// Optimized connection options
+const options: MongoClientOptions = {
   maxPoolSize: 10,
-  minPoolSize: 5,
-  retryWrites: true,
-  retryReads: true,
-  connectTimeoutMS: 10000,
+  minPoolSize: 1,
+  connectTimeoutMS: 30000,
   socketTimeoutMS: 45000,
-  serverSelectionTimeoutMS: 10000,
-  waitQueueTimeoutMS: 10000,
-  tls: true,
-  tlsInsecure: false
+  serverSelectionTimeoutMS: 30000,
+  writeConcern: {
+    w: 1,
+    wtimeout: 30000,
+    j: true
+  } as WriteConcernSettings,
+  retryWrites: true,
+  retryReads: true
 };
 
 let clientPromise: Promise<MongoClient>;
@@ -41,7 +42,7 @@ if (process.env.NODE_ENV === 'development') {
   }
   clientPromise = global._mongoClientPromise;
 } else {
-  // In production, it's best to not use a global variable
+  // In production, use connection pooling
   const client = new MongoClient(uri, options);
   clientPromise = client.connect()
     .then(client => {
@@ -50,16 +51,5 @@ if (process.env.NODE_ENV === 'development') {
     });
 }
 
-// Add connection health check function
-export const checkConnection = async () => {
-  try {
-    const client = await clientPromise;
-    await client.db('admin').command({ ping: 1 });
-    return true;
-  } catch (error) {
-    console.error('MongoDB connection health check failed:', error);
-    return false;
-  }
-};
-
+// Export the promisified client
 export default clientPromise;

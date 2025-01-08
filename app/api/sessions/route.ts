@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { checkConnection } from '@/lib/mongodb';
+import clientPromise from '@/lib/mongodb';
 import { MongoClient } from 'mongodb';
 
 interface GroupData {
@@ -28,23 +28,23 @@ const corsHeaders = {
 };
 
 const getMongoClient = async (): Promise<MongoClient> => {
-    let retries = 3;
-    while (retries > 0) {
-        try {
-            const client = await clientPromise;
-            const isConnected = await checkConnection();
-            if (!isConnected) {
-                throw new Error('MongoDB connection check failed');
-            }
-            return client;
-        } catch (error) {
-            retries--;
-            if (retries === 0) throw error;
-            console.log(`Retrying MongoDB connection... (${retries} attempts left)`);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+    try {
+        // Use a timeout to ensure we don't wait too long for the connection
+        const client = await Promise.race([
+            clientPromise,
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Connection timeout')), 3000)
+            )
+        ]) as MongoClient;
+
+        return client;
+    } catch (error) {
+        console.error('MongoDB connection error:', {
+            error,
+            timestamp: new Date().toISOString()
+        });
+        throw new Error('Failed to connect to MongoDB');
     }
-    throw new Error('Failed to connect to MongoDB after multiple attempts');
 };
 
 export async function GET(request: Request) {
