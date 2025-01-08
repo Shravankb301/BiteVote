@@ -143,7 +143,14 @@ export async function POST(request: Request) {
         );
 
         if (!result) {
-            throw new Error('Failed to update vote document');
+            console.error('Failed to update vote document:', result);
+            return NextResponse.json({ 
+                error: 'Failed to update vote',
+                details: 'No document returned after update'
+            }, { 
+                status: 500,
+                headers: corsHeaders
+            });
         }
 
         const voteCount = result.votedBy?.length || 0;
