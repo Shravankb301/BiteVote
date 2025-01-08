@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import clientPromise, { checkConnection, reconnect } from '@/lib/mongodb';
+import clientPromise, { checkConnection } from '@/lib/mongodb';
 import { pusherServer } from '@/lib/pusher';
-import { MongoClient, Document } from 'mongodb';
+import { MongoClient } from 'mongodb';
 
-interface VoteDocument extends Document {
+interface VoteDocument {
     restaurantId: string;
     sessionId: string;
     votedBy: string[];
@@ -16,30 +16,6 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-const getMongoClient = async (retries = 3): Promise<MongoClient> => {
-    try {
-        const client = await Promise.race([
-            clientPromise,
-            new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Connection timeout')), 5000)
-            )
-        ]) as MongoClient;
-        
-        const isConnected = await checkConnection();
-        if (!isConnected) {
-            throw new Error('MongoDB connection check failed');
-        }
-        return client;
-    } catch (error) {
-        if (retries > 0) {
-            console.log(`Retrying MongoDB connection... (${retries} attempts left)`);
-            await reconnect();
-            return getMongoClient(retries - 1);
-        }
-        throw error;
-    }
-};
-
 export async function GET(request: Request) {
     try {
         const { searchParams } = new URL(request.url);
@@ -47,10 +23,13 @@ export async function GET(request: Request) {
         const sessionId = searchParams.get('sessionId');
 
         if (!restaurantId || !sessionId) {
-            return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+            return NextResponse.json({ error: 'Missing parameters' }, { 
+                status: 400,
+                headers: corsHeaders
+            });
         }
 
-        const client = await getMongoClient();
+        const client = await clientPromise;
         const db = client.db('team-lunch-decider');
         
         const vote = await db.collection<VoteDocument>('votes').findOne({
@@ -61,6 +40,8 @@ export async function GET(request: Request) {
         return NextResponse.json({ 
             votes: vote?.votedBy?.length ?? 0,
             votedBy: vote?.votedBy ?? []
+        }, {
+            headers: corsHeaders
         });
     } catch (error) {
         console.error('Failed to fetch votes:', error);
@@ -68,7 +49,10 @@ export async function GET(request: Request) {
             error: 'Failed to fetch votes',
             votes: 0,
             votedBy: []
-        }, { status: 500 });
+        }, { 
+            status: 500,
+            headers: corsHeaders
+        });
     }
 }
 
@@ -87,94 +71,45 @@ export async function POST(request: Request) {
             });
         }
 
-        console.log('Connecting to MongoDB...');
-        const client = await getMongoClient();
-        console.log('Connected to MongoDB');
-        
+        const client = await clientPromise;
         const db = client.db('team-lunch-decider');
         const votesCollection = db.collection<VoteDocument>('votes');
 
-        // First check if user has already voted
-        console.log('Checking if user has already voted...');
-        const existingVote = await votesCollection.findOne({
-            restaurantId,
-            sessionId,
-            votedBy: userId
-        }, { maxTimeMS: 2000 });
-
-        if (existingVote) {
-            console.log('User has already voted for this restaurant');
-            return NextResponse.json({ 
-                error: 'User has already voted for this restaurant',
-                votes: existingVote.votedBy?.length || 0,
-                votedBy: existingVote.votedBy || []
-            }, { 
-                status: 400,
-                headers: corsHeaders
-            });
-        }
-
-        // Update or create vote document
-        console.log('Adding vote...');
-        const result = await votesCollection.findOneAndUpdate(
+        // Create or update vote document
+        console.log('Creating/updating vote document...');
+        const updateResult = await votesCollection.updateOne(
             { 
                 restaurantId,
                 sessionId
             },
             { 
-                $set: { 
-                    restaurantId,
-                    sessionId
-                },
                 $addToSet: { 
                     votedBy: userId 
                 }
             },
             { 
-                upsert: true,
-                returnDocument: 'after',
-                maxTimeMS: 5000
+                upsert: true
             }
-        ).catch(error => {
-            console.error('MongoDB update error:', error);
-            return null;
-        });
+        );
 
-        if (!result?.value) {
-            console.log('Fallback: Creating new vote document...');
-            // Fallback: Try to create a new document
-            const newVoteDoc: VoteDocument = {
-                restaurantId,
-                sessionId,
-                votedBy: [userId]
-            };
-            
-            const insertResult = await votesCollection.insertOne(newVoteDoc);
-            if (!insertResult.acknowledged) {
-                throw new Error('Failed to create vote document');
-            }
-
-            const createdDoc = await votesCollection.findOne({
-                _id: insertResult.insertedId
-            });
-
-            if (!createdDoc) {
-                throw new Error('Failed to fetch created vote document');
-            }
-
-            console.log('Successfully created new vote document');
-            return NextResponse.json({ 
-                success: true,
-                votes: 1,
-                votedBy: [userId]
-            }, {
-                headers: corsHeaders
-            });
+        if (!updateResult.acknowledged) {
+            console.error('Vote update not acknowledged');
+            throw new Error('Failed to update vote document');
         }
 
-        const finalVoteDoc = result.value;
-        const voteCount = finalVoteDoc.votedBy?.length || 0;
-        const voters = finalVoteDoc.votedBy || [];
+        // Get the updated vote count
+        const updatedVote = await votesCollection.findOne({
+            restaurantId,
+            sessionId
+        });
+
+        if (!updatedVote) {
+            console.error('Could not find updated vote document');
+            throw new Error('Failed to fetch updated vote document');
+        }
+
+        const voteCount = updatedVote.votedBy?.length || 0;
+        const voters = updatedVote.votedBy || [];
 
         console.log('Vote recorded successfully:', {
             restaurantId,
@@ -182,24 +117,19 @@ export async function POST(request: Request) {
             voters
         });
 
-        // Trigger real-time update via Pusher
-        console.log('Triggering Pusher update...');
+        // Trigger real-time update
         try {
-            await Promise.race([
-                pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
-                    restaurantId,
-                    votes: voteCount,
-                    votedBy: voters
-                }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Pusher timeout')), 3000))
-            ]);
+            await pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
+                restaurantId,
+                votes: voteCount,
+                votedBy: voters
+            });
             console.log('Pusher update successful');
         } catch (error) {
             console.error('Pusher error:', error);
             // Continue since the vote was successful
         }
 
-        console.log('Vote update complete');
         return NextResponse.json({ 
             success: true,
             votes: voteCount,
@@ -210,7 +140,7 @@ export async function POST(request: Request) {
     } catch (error) {
         console.error('Vote error:', error);
         return NextResponse.json({ 
-            error: 'Failed to update vote',
+            error: 'Failed to process vote',
             details: error instanceof Error ? error.message : 'Unknown error',
             votes: 0,
             votedBy: []

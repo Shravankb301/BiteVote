@@ -1,5 +1,4 @@
 "use client"
-
 import { Suspense, useCallback } from 'react'
 import { useEffect, useState } from 'react'
 import { Card } from "@/components/ui/card"
@@ -21,7 +20,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useSearchParams } from 'next/navigation';
-import { Toast } from "@/components/ui/toast";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +30,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { pusherClient } from '@/lib/pusher'
+import { useRouter } from 'next/navigation';
+import { useToast } from "@/components/ui/use-toast"
+import { Toaster } from "@/components/ui/toaster"
 
 interface Restaurant {
   id: string;
@@ -76,12 +77,13 @@ function GroupContent() {
   const [isSearching, setIsSearching] = useState(false)
   const searchParams = useSearchParams();
   const [isClient, setIsClient] = useState(false);
-  const [joinNotification, setJoinNotification] = useState<string>('');
-  const [showNotification, setShowNotification] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [sessionDataToJoin, setSessionDataToJoin] = useState<GroupData | null>(null);
+  const router = useRouter();
+  const { toast } = useToast();
+
   const [testUser] = useState<string | false>(() => {
     if (typeof window === 'undefined' || !window.location.search.includes('test=true')) {
       return false;
@@ -464,9 +466,10 @@ function GroupContent() {
                 const newMembers = (data.members || []).filter((m: string) => !currentMembers.includes(m));
                 
                 if (newMembers.length > 0) {
-                    setJoinNotification(`${newMembers[0]} joined the session`);
-                    setShowNotification(true);
-                    setTimeout(() => setShowNotification(false), 3000);
+                  toast({
+                    title: "New Member",
+                    description: `${newMembers[0]} joined the session`
+                  });
                 }
 
                 // Ensure data has required properties with defaults
@@ -619,6 +622,15 @@ function GroupContent() {
     }
   };
 
+  // Show notification using toast instead of custom Toast component
+  const showJoinNotification = (message: string) => {
+    toast({
+      title: "New Member",
+      description: message,
+    });
+  };
+
+  // Update the handleJoinGroup function
   const handleJoinGroup = async () => {
     if (!sessionDataToJoin || !newUserName.trim()) return;
 
@@ -629,12 +641,10 @@ function GroupContent() {
     };
     
     setGroupData(updatedData);
-    // Also set the restaurants to ensure we have the latest state
     setRestaurants(sessionDataToJoin.restaurants || []);
     localStorage.setItem('group', JSON.stringify(updatedData));
     setShowNameDialog(false);
 
-    // Update session with new member
     try {
       await fetch('/api/sessions', {
         method: 'POST',
@@ -645,12 +655,15 @@ function GroupContent() {
         })
       });
 
-      // Show notification
-      setJoinNotification(`${newUserName.trim()} joined the session`);
-      setShowNotification(true);
-      setTimeout(() => setShowNotification(false), 3000);
+      // Show notification using toast
+      showJoinNotification(`${newUserName.trim()} joined the session`);
     } catch (error) {
       console.error('Error updating session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to join session. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -665,6 +678,53 @@ function GroupContent() {
     console.log('Total votes:', total);
     return total;
   }, [restaurants]);
+
+  const handleEndSession = async () => {
+    if (!groupData?.code) {
+      console.error('No session code available');
+      return;
+    }
+
+    try {
+      // Call cleanup endpoint
+      const response = await fetch('/api/cleanup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          sessionId: groupData.code
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to cleanup session');
+      }
+
+      // Execute cleanup script from response
+      if (data.script) {
+        eval(data.script);
+      }
+
+      // Show success toast
+      toast({
+        title: "Success",
+        description: "Session ended successfully.",
+      });
+
+      // Redirect to home page
+      router.push('/');
+    } catch (error) {
+      console.error('Failed to end session:', error);
+      toast({
+        title: "Error",
+        description: "Failed to end session. Please try again.",
+        variant: "destructive"
+      });
+    }
+  };
 
   if (!isClient || isLoading) {
     return (
@@ -870,6 +930,17 @@ function GroupContent() {
         )}
       </AnimatePresence>
 
+      {/* End Session Button */}
+      <div className="container mx-auto px-4 pb-8">
+        <Button 
+          variant="destructive" 
+          onClick={handleEndSession}
+          className="w-full"
+        >
+          End Session
+        </Button>
+      </div>
+
       <AlertDialog open={!!restaurantToDelete} onOpenChange={() => setRestaurantToDelete(null)}>
         <AlertDialogContent className="bg-slate-900 border-slate-800">
           <AlertDialogHeader>
@@ -891,11 +962,6 @@ function GroupContent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      <Toast 
-        message={joinNotification}
-        isVisible={showNotification}
-      />
 
       {/* Name Dialog */}
       <Dialog open={showNameDialog} onOpenChange={setShowNameDialog}>
@@ -929,6 +995,9 @@ function GroupContent() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Toast for notifications */}
+      <Toaster />
     </div>
   )
 }
