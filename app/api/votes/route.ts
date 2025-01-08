@@ -9,9 +9,22 @@ interface VoteDocument extends Document {
     votedBy: string[];
 }
 
+const corsHeaders = {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
 const getMongoClient = async (retries = 3): Promise<MongoClient> => {
     try {
-        const client = await clientPromise;
+        const client = await Promise.race([
+            clientPromise,
+            new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Connection timeout')), 5000)
+            )
+        ]) as MongoClient;
+        
         const isConnected = await checkConnection();
         if (!isConnected) {
             throw new Error('MongoDB connection check failed');
@@ -68,7 +81,10 @@ export async function POST(request: Request) {
 
         if (!restaurantId || !sessionId || !userId) {
             console.error('Missing parameters:', { restaurantId, sessionId, userId });
-            return NextResponse.json({ error: 'Missing parameters' }, { status: 400 });
+            return NextResponse.json({ error: 'Missing parameters' }, { 
+                status: 400,
+                headers: corsHeaders
+            });
         }
 
         console.log('Connecting to MongoDB...');
@@ -78,52 +94,55 @@ export async function POST(request: Request) {
         const db = client.db('team-lunch-decider');
         const votesCollection = db.collection<VoteDocument>('votes');
 
-        // First, check if user has already voted
-        console.log('Checking for existing vote...');
+        // First check if user has already voted
+        console.log('Checking if user has already voted...');
         const existingVote = await votesCollection.findOne({
             restaurantId,
             sessionId,
-            votedBy: { $elemMatch: { $eq: userId } }
-        }, { maxTimeMS: 5000 });
-
-        console.log('Existing vote check result:', existingVote);
+            votedBy: userId
+        }, { maxTimeMS: 2000 });
 
         if (existingVote) {
-            console.log('User has already voted');
+            console.log('User has already voted for this restaurant');
             return NextResponse.json({ 
                 error: 'User has already voted for this restaurant',
                 votes: existingVote.votedBy?.length || 0,
                 votedBy: existingVote.votedBy || []
-            }, { status: 400 });
+            }, { 
+                status: 400,
+                headers: corsHeaders
+            });
         }
 
-        let finalVoteDoc: VoteDocument | null = null;
-
-        // First try to update an existing document
-        console.log('Updating vote...');
-        const updateResult = await votesCollection.findOneAndUpdate(
+        // Update or create vote document
+        console.log('Adding vote...');
+        const result = await votesCollection.findOneAndUpdate(
             { 
-                restaurantId, 
-                sessionId,
-                votedBy: { $exists: true } // Only update if votedBy exists
+                restaurantId,
+                sessionId
             },
             { 
+                $set: { 
+                    restaurantId,
+                    sessionId
+                },
                 $addToSet: { 
                     votedBy: userId 
                 }
             },
             { 
-                returnDocument: 'after'
+                upsert: true,
+                returnDocument: 'after',
+                maxTimeMS: 5000
             }
-        );
+        ).catch(error => {
+            console.error('MongoDB update error:', error);
+            return null;
+        });
 
-        if (updateResult?.value) {
-            finalVoteDoc = updateResult.value;
-        }
-
-        // If no existing document was found, create a new one
-        if (!finalVoteDoc) {
-            console.log('No existing vote document, creating new one...');
+        if (!result?.value) {
+            console.log('Fallback: Creating new vote document...');
+            // Fallback: Try to create a new document
             const newVoteDoc: VoteDocument = {
                 restaurantId,
                 sessionId,
@@ -134,29 +153,46 @@ export async function POST(request: Request) {
             if (!insertResult.acknowledged) {
                 throw new Error('Failed to create vote document');
             }
-            
-            finalVoteDoc = newVoteDoc;
+
+            const createdDoc = await votesCollection.findOne({
+                _id: insertResult.insertedId
+            });
+
+            if (!createdDoc) {
+                throw new Error('Failed to fetch created vote document');
+            }
+
+            console.log('Successfully created new vote document');
+            return NextResponse.json({ 
+                success: true,
+                votes: 1,
+                votedBy: [userId]
+            }, {
+                headers: corsHeaders
+            });
         }
 
-        console.log('Final vote document:', finalVoteDoc);
-
-        if (!finalVoteDoc) {
-            console.error('Failed to update/create vote document');
-            throw new Error('Failed to update/create vote document');
-        }
-
-        // Get the vote counts
+        const finalVoteDoc = result.value;
         const voteCount = finalVoteDoc.votedBy?.length || 0;
         const voters = finalVoteDoc.votedBy || [];
+
+        console.log('Vote recorded successfully:', {
+            restaurantId,
+            voteCount,
+            voters
+        });
 
         // Trigger real-time update via Pusher
         console.log('Triggering Pusher update...');
         try {
-            await pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
-                restaurantId,
-                votes: voteCount,
-                votedBy: voters
-            });
+            await Promise.race([
+                pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
+                    restaurantId,
+                    votes: voteCount,
+                    votedBy: voters
+                }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Pusher timeout')), 3000))
+            ]);
             console.log('Pusher update successful');
         } catch (error) {
             console.error('Pusher error:', error);
@@ -168,6 +204,8 @@ export async function POST(request: Request) {
             success: true,
             votes: voteCount,
             votedBy: voters
+        }, {
+            headers: corsHeaders
         });
     } catch (error) {
         console.error('Vote error:', error);
@@ -176,6 +214,13 @@ export async function POST(request: Request) {
             details: error instanceof Error ? error.message : 'Unknown error',
             votes: 0,
             votedBy: []
-        }, { status: 500 });
+        }, { 
+            status: 500,
+            headers: corsHeaders
+        });
     }
+}
+
+export async function OPTIONS() {
+    return NextResponse.json({}, { headers: corsHeaders });
 } 
