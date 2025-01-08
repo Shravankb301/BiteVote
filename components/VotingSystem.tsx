@@ -136,7 +136,14 @@ export default function VotingSystem({ restaurants, onRemove, onVote, currentUse
         }),
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        const textResponse = await response.text();
+        data = JSON.parse(textResponse);
+      } catch (parseError) {
+        console.error('Failed to parse response:', parseError);
+        throw new Error('Server returned invalid response format');
+      }
       
       if (!response.ok) {
         console.error('Vote error:', data.error);
