@@ -104,8 +104,11 @@ export async function POST(request: Request) {
 
         const db = client.db('team-lunch-decider');
         
-        // Destructure and ignore _id using TypeScript's type system
-        const { _id, ...groupDataToSave } = groupData as GroupData;
+        // Create a new object without the _id field
+        const groupDataToSave = Object.fromEntries(
+            Object.entries(groupData as GroupData)
+                .filter(([key]) => key !== '_id')
+        ) as Omit<GroupData, '_id'>;
         
         // Add timestamp for debugging
         groupDataToSave.lastUpdated = new Date().toISOString();
