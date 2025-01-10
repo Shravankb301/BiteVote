@@ -1,16 +1,17 @@
-import './globals.css'
+import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { Toaster } from "@/components/ui/toaster"
-import { initializeDatabase } from '@/lib/db-indexes'
+import './globals.css'
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+})
 
-// Initialize database indexes
-initializeDatabase().catch(console.error);
-
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Team Lunch Decider',
-  description: 'Decide where to eat as a team',
+  description: 'Decide where to eat with your team',
 }
 
 export default function RootLayout({
@@ -19,8 +20,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" className={inter.variable}>
+      <body>
         {children}
         <Toaster />
       </body>

@@ -325,7 +325,11 @@ function GroupContent() {
   const handleLocationSelect = async (location: string | { lat: number; lng: number; query?: string }) => {
     console.log('Location selected:', location);
     if (typeof location === 'string') {
-        setError("Please use the location detection feature");
+        toast({
+            title: "Location Error",
+            description: "Please use the location detection feature",
+            variant: "destructive"
+        });
         return;
     }
 
@@ -352,9 +356,27 @@ function GroupContent() {
         }
         
         setSearchResults(data);
+        
+        if (data.length === 0) {
+            toast({
+                title: "No Results",
+                description: "No restaurants found in your area. Try expanding your search.",
+            });
+        } else {
+            toast({
+                title: "Restaurants Found",
+                description: `Found ${data.length} restaurants near you.`,
+            });
+        }
     } catch (error) {
         console.error('Error searching restaurants:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch restaurants');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to fetch restaurants';
+        setError(errorMessage);
+        toast({
+            title: "Search Error",
+            description: errorMessage,
+            variant: "destructive"
+        });
     } finally {
         setIsSearching(false);
     }

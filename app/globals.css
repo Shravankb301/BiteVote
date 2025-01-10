@@ -5,19 +5,29 @@
 /* Add these styles at the top of your globals.css */
 html, body {
   overflow-x: hidden;
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;     /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
+  min-height: 100%;
+  height: auto;
 }
 
-html::-webkit-scrollbar,
-body::-webkit-scrollbar {
-  display: none;  /* Chrome, Safari and Opera */
+html::-webkit-scrollbar {
+  width: 8px;
+}
+
+html::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.5);
+  border-radius: 4px;
 }
 
 body {
   font-family: Arial, Helvetica, sans-serif;
   @apply bg-slate-950;
-  position: relative; /* Add this to prevent horizontal scroll */
+  position: relative;
   width: 100%;
 }
 
@@ -187,4 +197,87 @@ html {
   .no-scrollbar::-webkit-scrollbar {
     display: none;  /* Chrome, Safari and Opera */
   }
+}
+
+/* Force content to be laid out before animations */
+.content-visible {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 5000px;
+}
+
+/* Core browser optimizations */
+@supports selector(::-webkit-scrollbar) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
+    scroll-behavior: smooth;
+  }
+  
+  html::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  html::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  html::-webkit-scrollbar-thumb {
+    background-color: rgba(100, 116, 139, 0.5);
+    border-radius: 4px;
+  }
+}
+
+/* Firefox specific scrollbar */
+@supports (scrollbar-width: thin) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
+  }
+}
+
+/* Base styles */
+html, body {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+  min-height: 100%;
+  height: auto;
+}
+
+/* Performance optimizations */
+.content-visible {
+  content-visibility: auto;
+  contain-intrinsic-size: 1px 5000px;
+}
+
+@supports not (content-visibility: auto) {
+  .content-visible {
+    visibility: visible;
+  }
+}
+
+/* Reduce motion if user prefers it */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  
+  .animate-blob,
+  .animate-spin-slow,
+  .animate-pulse {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+/* Ensure smooth animations across browsers */
+.animate-blob,
+.animate-spin-slow,
+.animate-pulse {
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
