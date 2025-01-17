@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "./ui/badge"
 import { ArrowRight, Clock, Check, X, Sparkles, Pizza, Utensils } from 'lucide-react'
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   Dialog,
   DialogContent,
@@ -135,42 +135,39 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                   </motion.h1>
 
                   <div className="relative">
-                    <motion.p 
+                    <motion.div 
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.4, duration: 0.5 }}
-                      className="text-xl text-slate-300 mb-12 max-w-2xl mx-auto"
+                      className="flex flex-col items-center text-xl text-slate-300 mb-12 max-w-2xl mx-auto space-y-4"
                     >
-                      <motion.span
-                        className="relative inline-flex items-center text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.6 }}
-                      >
-                        Effortless dining decisions,
-                      </motion.span>
-                      <motion.span
-                        className="relative inline-flex items-center text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 mx-2"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.8 }}
-                      >
-                        zero debates,
-                      </motion.span>
-                      <motion.span
-                        className="relative inline-flex items-center text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-500"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 1 }}
-                      >
-                        all delicious!
-                      </motion.span>
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: 1.2, type: "spring", stiffness: 200 }}
-                        className="mt-4 flex items-center justify-center gap-2"
-                      >
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        <motion.span
+                          className="relative inline-flex items-center text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.6 }}
+                        >
+                          Effortless dining decisions,
+                        </motion.span>
+                        <motion.span
+                          className="relative inline-flex items-center text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 0.8 }}
+                        >
+                          zero debates,
+                        </motion.span>
+                        <motion.span
+                          className="relative inline-flex items-center text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-500"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ delay: 1 }}
+                        >
+                          all delicious!
+                        </motion.span>
+                      </div>
+                      <div className="flex items-center justify-center gap-2">
                         <span className="text-lg text-slate-400">
                           From indecision to satisfaction in minutes
                         </span>
@@ -180,8 +177,8 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                         >
                           <Pizza className="w-5 h-5 text-yellow-400 inline-block" />
                         </motion.div>
-                      </motion.div>
-                    </motion.p>
+                      </div>
+                    </motion.div>
                   </div>
 
                   <motion.div

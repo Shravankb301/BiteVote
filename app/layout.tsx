@@ -5,13 +5,16 @@ import './globals.css'
 
 const inter = Inter({ 
   subsets: ['latin'],
-  display: 'swap',
+  display: 'block',
   variable: '--font-inter',
+  preload: true,
+  adjustFontFallback: true,
 })
 
 export const metadata: Metadata = {
   title: 'Team Lunch Decider',
   description: 'Decide where to eat with your team',
+  viewport: 'width=device-width, initial-scale=1',
 }
 
 export default function RootLayout({
@@ -20,8 +23,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body>
+    <html lang="en" className={`${inter.variable} antialiased`}>
+      <body suppressHydrationWarning className={inter.className}>
         {children}
         <Toaster />
       </body>
