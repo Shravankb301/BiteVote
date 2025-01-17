@@ -69,9 +69,18 @@ export async function POST(request: Request) {
 
         if (existingVotes.length > 0) {
             const votedRestaurants = existingVotes[0].restaurants;
+            console.info('Vote prevented - user already voted:', {
+                sessionId,
+                userId,
+                attemptedRestaurantId: restaurantId,
+                previousVoteRestaurantId: votedRestaurants[0],
+                timestamp: new Date().toISOString()
+            });
+            
             return NextResponse.json({ 
                 error: 'Already voted in this session',
-                message: `You have already voted for ${votedRestaurants[0]} in this session`,
+                message: `You have already voted in this session`,
+                votedRestaurantId: votedRestaurants[0],
                 votes: 0,
                 votedBy: []
             }, { 
@@ -93,6 +102,12 @@ export async function POST(request: Request) {
                 }, { session });
 
                 if (voteExists) {
+                    console.info('Vote prevented in transaction - user already voted:', {
+                        sessionId,
+                        userId,
+                        restaurantId,
+                        timestamp: new Date().toISOString()
+                    });
                     throw new Error('Already voted in this session');
                 }
 
@@ -114,6 +129,12 @@ export async function POST(request: Request) {
                 ) as Document | null;
 
                 if (!result) {
+                    console.error('Vote update failed:', {
+                        sessionId,
+                        userId,
+                        restaurantId,
+                        timestamp: new Date().toISOString()
+                    });
                     throw new Error('Vote update failed');
                 }
             });
@@ -122,11 +143,26 @@ export async function POST(request: Request) {
         }
 
         if (!result) {
+            console.error('Vote transaction failed:', {
+                sessionId,
+                userId,
+                restaurantId,
+                timestamp: new Date().toISOString()
+            });
             throw new Error('Vote transaction failed');
         }
 
         const votedBy = (result as VoteDocument).votedBy;
         const votes = votedBy.length;
+
+        // Log successful vote
+        console.info('Vote recorded successfully:', {
+            sessionId,
+            userId,
+            restaurantId,
+            totalVotes: votes,
+            timestamp: new Date().toISOString()
+        });
 
         // 5. Fire Pusher update without waiting
         void pusherServer.trigger(`session-${sessionId}`, 'vote-update', {
@@ -137,6 +173,8 @@ export async function POST(request: Request) {
             console.error('Pusher error:', {
                 error,
                 sessionId,
+                userId,
+                restaurantId,
                 timestamp: new Date().toISOString()
             });
         });

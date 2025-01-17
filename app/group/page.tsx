@@ -81,6 +81,7 @@ function GroupContent() {
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [newUserName, setNewUserName] = useState('');
   const [sessionDataToJoin, setSessionDataToJoin] = useState<GroupData | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string>('');
   const router = useRouter();
   const { toast } = useToast();
 
@@ -101,6 +102,12 @@ function GroupContent() {
     const initializeGroup = async () => {
       setIsLoading(true);
       const isTestMode = window.location.search.includes('test=true');
+
+      // Load current user from localStorage
+      const storedUserName = localStorage.getItem('currentUser');
+      if (storedUserName) {
+        setCurrentUserName(storedUserName);
+      }
 
       if (isTestMode) {
         const testSessionId = 'test_session_123';
@@ -296,33 +303,61 @@ function GroupContent() {
   }
 
   const handleRemoveRestaurant = (restaurantId: string) => {
-    setRestaurantToDelete(restaurantId)
-    updateSession()
+    setRestaurantToDelete(restaurantId);
   }
 
   const confirmRemoveRestaurant = async () => {
-    if (restaurantToDelete) {
+    if (!restaurantToDelete || !groupData) return;
+
+    try {
         const newRestaurants = restaurants.filter(r => r.id !== restaurantToDelete);
+        
+        // Update local state and localStorage atomically
+        const updatedGroupData = {
+            ...groupData,
+            restaurants: newRestaurants,
+            lastUpdated: new Date().toISOString()
+        };
+
         setRestaurants(newRestaurants);
         setRestaurantToDelete(null);
+        setGroupData(updatedGroupData);
+        localStorage.setItem('group', JSON.stringify(updatedGroupData));
         
-        // Update session after removing restaurant
-        if (groupData) {
+        // Update session
+        await fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                code: groupData.code,
+                groupData: updatedGroupData
+            })
+        });
+
+        // Show success message
+        const removedRestaurant = restaurants.find(r => r.id === restaurantToDelete);
+        toast({
+            title: "Restaurant Removed",
+            description: `${removedRestaurant?.name} has been removed from voting.`
+        });
+
+    } catch (error) {
+        console.error('Error removing restaurant:', error);
+        toast({
+            title: "Error",
+            description: "Failed to remove restaurant. Please try again.",
+            variant: "destructive"
+        });
+        
+        // Revert local state on error by reloading from localStorage
+        const storedGroup = localStorage.getItem('group');
+        if (storedGroup) {
             try {
-                await fetch('/api/sessions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        code: groupData.code,
-                        groupData: {
-                            ...groupData,
-                            restaurants: newRestaurants,
-                            lastUpdated: new Date().toISOString()
-                        }
-                    })
-                });
-            } catch (error) {
-                console.error('Error updating session:', error);
+                const parsedGroup = JSON.parse(storedGroup);
+                setGroupData(parsedGroup);
+                setRestaurants(parsedGroup.restaurants || []);
+            } catch (e) {
+                console.error('Error parsing stored group data:', e);
             }
         }
     }
@@ -439,28 +474,6 @@ function GroupContent() {
         } catch (error) {
             console.error('Error updating session:', error);
         }
-    }
-  };
-
-  const updateSession = async () => {
-    if (!groupData) return;
-    
-    const timestamp = new Date().toISOString();
-    try {
-        await fetch('/api/sessions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                code: groupData.code,
-                groupData: {
-                    ...groupData,
-                    restaurants,
-                    lastUpdated: timestamp
-                }
-            })
-        });
-    } catch (error) {
-        console.error('Error updating session:', error);
     }
   };
 
@@ -600,8 +613,17 @@ function GroupContent() {
   const handleVote = async (restaurantId: string) => {
     if (!groupData) return;
 
-    // Clean the user name to prevent escape characters
-    const voterName = (testUser || groupData.members[0])?.replace(/[\\'"]/g, '');
+    // Use the stored current user name or test user
+    const voterName = testUser || currentUserName;
+    
+    if (!voterName) {
+      toast({
+        title: "Error",
+        description: "Could not determine user identity. Please try rejoining the session.",
+        variant: "destructive"
+      });
+      return;
+    }
 
     try {
         // Call the votes API
@@ -618,7 +640,37 @@ function GroupContent() {
         const data = await response.json();
         
         if (!response.ok) {
-            console.error('Vote error:', data.error);
+            // Handle specific error cases
+            if (data.error === 'Already voted in this session') {
+                console.info('Vote prevented:', {
+                    reason: 'User already voted',
+                    user: voterName,
+                    votedRestaurantId: data.votedRestaurantId
+                });
+                
+                const votedRestaurantId = data.votedRestaurantId;
+                const votedRestaurant = restaurants.find(r => r.id === votedRestaurantId);
+                toast({
+                    title: "Already Voted",
+                    description: votedRestaurant 
+                        ? `You have already voted for ${votedRestaurant.name} in this session.`
+                        : "You have already voted in this session.",
+                    variant: "destructive"
+                });
+            } else {
+                console.error('Vote error:', {
+                    error: data.error,
+                    status: response.status,
+                    user: voterName,
+                    restaurantId
+                });
+                
+                toast({
+                    title: "Error",
+                    description: data.error || "Failed to record your vote. Please try again.",
+                    variant: "destructive"
+                });
+            }
             return;
         }
 
@@ -645,8 +697,32 @@ function GroupContent() {
         setGroupData(updatedGroupData);
         localStorage.setItem('group', JSON.stringify(updatedGroupData));
 
+        // Show success message
+        const votedRestaurant = restaurants.find(r => r.id === restaurantId);
+        console.info('Vote recorded:', {
+            user: voterName,
+            restaurant: votedRestaurant?.name,
+            totalVotes: data.votes
+        });
+        
+        toast({
+            title: "Vote Recorded",
+            description: `Your vote for ${votedRestaurant?.name} has been recorded.`,
+        });
+
     } catch (error) {
-        console.error('Error updating votes:', error);
+        console.error('Vote error:', {
+            error,
+            message: error instanceof Error ? error.message : 'Unknown error',
+            user: voterName,
+            restaurantId
+        });
+        
+        toast({
+            title: "Error",
+            description: "Failed to record your vote. Please try again.",
+            variant: "destructive"
+        });
     }
   };
 
@@ -662,10 +738,16 @@ function GroupContent() {
   const handleJoinGroup = async () => {
     if (!sessionDataToJoin || !newUserName.trim()) return;
 
+    const userName = newUserName.trim();
+    
+    // Store the user name in localStorage
+    localStorage.setItem('currentUser', userName);
+    setCurrentUserName(userName);
+
     // Add new member to the session
     const updatedData = {
       ...sessionDataToJoin,
-      members: [...(sessionDataToJoin.members || []), newUserName.trim()]
+      members: [...(sessionDataToJoin.members || []), userName]
     };
     
     setGroupData(updatedData);
@@ -684,7 +766,7 @@ function GroupContent() {
       });
 
       // Show notification using toast
-      showJoinNotification(`${newUserName.trim()} joined the session`);
+      showJoinNotification(`${userName} joined the session`);
     } catch (error) {
       console.error('Error updating session:', error);
       toast({
@@ -929,7 +1011,7 @@ function GroupContent() {
                   restaurants={restaurants} 
                   onRemove={handleRemoveRestaurant}
                   onVote={handleVote}
-                  currentUser={testUser || groupData.members[0]}
+                  currentUser={testUser || currentUserName}
                   sessionId={groupData.code}
                 />
             </div>

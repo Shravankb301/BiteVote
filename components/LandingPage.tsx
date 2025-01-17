@@ -39,6 +39,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
       lastUpdated: new Date().toISOString()
     }
     localStorage.setItem('group', JSON.stringify(newGroup))
+    localStorage.setItem('currentUser', userName.trim())
     setCode(code)
     setIsModalOpen(false)
     onGroupCreated()
