@@ -221,27 +221,33 @@ function GroupContent() {
           if (response.ok && sessionData) {
             // Check if user already has group data
             const existingData = localStorage.getItem('group');
-            if (!existingData) {
-              // Show name dialog for new user
+            const existingGroupData = existingData ? JSON.parse(existingData) : null;
+            
+            // If no existing data or different group, show join dialog
+            if (!existingGroupData || existingGroupData.code !== sharedCode) {
               setSessionDataToJoin(sessionData);
-              setShowNameDialog(true);
               setIsLoading(false);
               return;
             }
-            // Initialize with session data
-            setGroupData(sessionData);
+            
+            // Initialize with existing session data
+            setGroupData(existingGroupData);
             setRestaurants(sessionData.restaurants || []);
-            localStorage.setItem('group', JSON.stringify(sessionData));
             setIsLoading(false);
             return;
           }
         } catch (error) {
           console.error('Error fetching session:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load group session. Please try again.",
+            variant: "destructive"
+          });
         }
       }
       
       // If no shared code or session fetch failed, try local storage
-      const data = localStorage.getItem('group')
+      const data = localStorage.getItem('group');
       if (data) {
         try {
           const parsedData = JSON.parse(data);
@@ -250,12 +256,12 @@ function GroupContent() {
           
           // Initialize session
           await fetch('/api/sessions', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                  code: parsedData.code,
-                  groupData: parsedData
-              })
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code: parsedData.code,
+              groupData: parsedData
+            })
           }).catch(error => console.error('Error initializing session:', error));
         } catch (error) {
           console.error('Error parsing group data:', error);
@@ -265,7 +271,7 @@ function GroupContent() {
     };
 
     initializeGroup();
-  }, [searchParams, testUser]);
+  }, [searchParams, testUser, toast]);
 
   const handleCopyLink = async () => {
     if (groupData) {
@@ -752,6 +758,46 @@ function GroupContent() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950 flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
+
+  // Show name dialog if we have session data to join but no group data
+  if (sessionDataToJoin && !groupData) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950">
+        <Dialog open={true} onOpenChange={() => {}}>
+          <DialogContent className="sm:max-w-[425px] bg-slate-900 border-slate-800">
+            <DialogHeader>
+              <DialogTitle className="text-white">Join {sessionDataToJoin.name}</DialogTitle>
+              <DialogDescription className="text-slate-400">
+                Enter your name to join the group session.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="name" className="text-white">Your Name</Label>
+                <Input
+                  id="name"
+                  placeholder="Enter your name"
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                onClick={handleJoinGroup}
+                className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
+                disabled={!newUserName.trim()}
+              >
+                Join Group
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
