@@ -412,13 +412,17 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
         <DialogContent className="sm:max-w-[425px] bg-slate-900 border-slate-800">
           <DialogHeader>
             <DialogTitle className="text-white">Create Your Group</DialogTitle>
-            <DialogDescription className="text-slate-400">
-              Enter your details to start planning with your group.
-              {code && (
-                <Badge className="mt-2 bg-green-500/10 text-green-500 border-green-500/20">
-                  Your group code: {code}
-                </Badge>
-              )}
+            <DialogDescription asChild>
+              <div className="text-slate-400">
+                <p>Enter your details to start planning with your group.</p>
+                {code && (
+                  <div className="mt-2">
+                    <Badge className="bg-green-500/10 text-green-500 border-green-500/20">
+                      Your group code: {code}
+                    </Badge>
+                  </div>
+                )}
+              </div>
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
