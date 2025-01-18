@@ -30,22 +30,6 @@ if (!GOOGLE_API_KEY) {
 
 const gmaps = new Client({});
 
-const extractDietaryOptions = (types: string[] | undefined): string[] => {
-    if (!types) return [];
-
-    const lowerCaseTypes = types.map(type => type.toLowerCase());
-    const dietaryTerms = {
-        vegetarian: /vegetarian/,
-        vegan: /vegan/,
-        glutenFree: /gluten-free/,
-        halal: /halal/,
-    };
-    
-    return Object.entries(dietaryTerms)
-        .filter(([, regex]) => lowerCaseTypes.some(type => regex.test(type)))
-        .map(([term]) => term);
-};
-
 const getRestaurantData = async (place_id: string, key: string): Promise<Omit<Restaurant, 'id' | 'place_id' | 'priceRange' | 'distance' | 'vicinity'> | null> => {
     const detailsParams: PlaceDetailsRequest['params'] = {
         place_id,

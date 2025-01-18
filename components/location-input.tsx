@@ -210,7 +210,7 @@ export function LocationInput({ onLocationSelect, className, autoDetectOnMount =
                 </form>
                 {currentLocation && !isSearchFocused && (
                     <div className="text-sm text-blue-400/80 animate-pulse mt-1">
-                        Try searching for "Italian" ☕️, "Sushi" 🍱, or your favorite cuisine! 
+                        Try searching for &ldquo;Italian&rdquo; ☕️, &ldquo;Sushi&rdquo; 🍱, or your favorite cuisine! 
                     </div>
                 )}
                 <Button
@@ -257,6 +257,14 @@ export function LocationInput({ onLocationSelect, className, autoDetectOnMount =
                     {error}
                 </div>
             )}
+
+            <div className="text-center py-8 text-slate-500">
+                {error ? (
+                    <p>Error loading places: {error}</p>
+                ) : (
+                    <p>Search for a location like &ldquo;Kansas City&rdquo; or &ldquo;NYC&rdquo; or &ldquo;94105&rdquo;</p>
+                )}
+            </div>
         </div>
     );
 } 

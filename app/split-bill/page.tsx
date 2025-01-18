@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calculator, DollarSign, Users, Receipt, Split, Share2, QrCode, Plus, Minus, AlertCircle, ChevronLeft, ChevronRight, Download, Copy, Check } from 'lucide-react'
+import { Calculator, DollarSign, Users, Receipt, Split, Share2, Plus, Minus, AlertCircle, ChevronLeft, ChevronRight, Download, Copy, Check } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -47,6 +47,12 @@ export default function SplitBillPage() {
   const qrCodeRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [showDistributeButton, setShowDistributeButton] = useState(false)
+  const [canShare, setCanShare] = useState(false)
+
+  useEffect(() => {
+    // Check if sharing is available
+    setCanShare(typeof navigator !== 'undefined' && !!navigator.share)
+  }, [])
 
   const customSplitTotal = useMemo(() => {
     return customSplits.reduce((sum, split) => sum + (parseFloat(split.amount) || 0), 0)
@@ -59,22 +65,12 @@ export default function SplitBillPage() {
   }, [totalAmount, customSplitTotal])
 
   useEffect(() => {
-    // Only update when switching to custom split mode
     if (isCustomSplit && totalAmount && customSplits.length === 1 && !customSplits[0].amount) {
       setCustomSplits([{ name: customSplits[0].name, amount: totalAmount }])
     }
-  }, [isCustomSplit, totalAmount])
-
-  useEffect(() => {
-    // Handle distribute button visibility
     const shouldShowDistribute = remainingAmount > 0 && remainingAmount < 1 && customSplits.some(split => parseFloat(split.amount) > 0)
     setShowDistributeButton(shouldShowDistribute)
-  }, [remainingAmount, customSplits])
-
-  const isOverBudget = useMemo(() => {
-    if (!totalAmount) return false
-    return customSplitTotal > parseFloat(totalAmount)
-  }, [totalAmount, customSplitTotal])
+  }, [isCustomSplit, totalAmount, customSplits, remainingAmount]);
 
   const addPerson = () => {
     // Allow adding a new person at any time
@@ -91,34 +87,11 @@ export default function SplitBillPage() {
     }
   }
 
-  const updateCustomSplit = (index: number, field: 'name' | 'amount', value: string) => {
-    const newSplits = [...customSplits]
-    
-    if (field === 'amount') {
-      // Allow empty string and initial decimal point
-      if (value === '' || value === '.') {
-        newSplits[index][field] = value
-        setCustomSplits(newSplits)
-        return
-      }
-      
-      // Basic number validation
-      const numValue = parseFloat(value)
-      if (isNaN(numValue) || numValue < 0) return
-      
-      // Format to max 2 decimal places if there's a decimal point
-      if (value.includes('.')) {
-        const [whole, decimal] = value.split('.')
-        if (decimal && decimal.length > 2) return
-      }
-
-      newSplits[index][field] = value
-      setCustomSplits(newSplits)
-    } else {
-      newSplits[index][field] = value
-      setCustomSplits(newSplits)
-    }
-  }
+  const updateCustomSplit = (index: number, amount: string) => {
+    const newSplits = [...customSplits];
+    newSplits[index].amount = amount;
+    setCustomSplits(newSplits);
+  };
 
   // Add this function to check if a split amount is valid
   const getSplitValidationStatus = (amount: string) => {
@@ -246,7 +219,7 @@ export default function SplitBillPage() {
       return;
     }
 
-    if (navigator.share) {
+    if (canShare) {
       try {
         const shareText = isCustomSplit 
           ? `Split bill payment details for ${results.customAmounts?.[0]?.name}. Amount: ${formatCurrency(results.customAmounts?.[0]?.amount)}. Pay to Venmo: ${venmoId}`
@@ -292,6 +265,8 @@ export default function SplitBillPage() {
   };
 
   const copyToClipboard = async (amount: number, name?: string) => {
+    if (typeof navigator === 'undefined') return;
+    
     const paymentText = `Pay ${formatCurrency(amount)} to @${venmoId}${name ? ` (${name})` : ''} via Venmo`
     const venmoLink = generatePaymentData(amount)
     const textToCopy = `${paymentText}\n\nOpen in Venmo app:\n${venmoLink}\n\nOr click this link on your phone to open Venmo:\nhttps://venmo.com/${venmoId}?txn=pay&amount=${amount.toFixed(2)}&note=${encodeURIComponent('Split bill payment')}`
@@ -347,7 +322,7 @@ export default function SplitBillPage() {
           <Card className="p-6 bg-slate-900/50 border-slate-800">
             <div className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="venmoId" className="text-white">Host's Venmo ID</Label>
+                <Label htmlFor="venmoId" className="text-white">Host&apos;s Venmo ID</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">@</span>
                   <Input
@@ -452,10 +427,15 @@ export default function SplitBillPage() {
                   {customSplits.map((split, index) => (
                     <div key={index} className="flex space-x-2">
                       <Input
-                        placeholder="Name"
+                        type="text"
+                        placeholder="Enter name"
                         value={split.name}
-                        onChange={(e) => updateCustomSplit(index, 'name', e.target.value)}
-                        className="bg-slate-800 border-slate-700 text-white w-[70%]"
+                        onChange={(e) => {
+                          const newSplits = [...customSplits];
+                          newSplits[index].name = e.target.value;
+                          setCustomSplits(newSplits);
+                        }}
+                        className="bg-slate-800 border-slate-700 text-white"
                       />
                       <TooltipProvider>
                         <Tooltip>
@@ -463,18 +443,13 @@ export default function SplitBillPage() {
                             <div className="relative w-[30%]">
                               <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
                               <Input
-                                type="text"
-                                inputMode="decimal"
-                                pattern="[0-9]*[.]?[0-9]*"
-                                placeholder="0.00"
+                                type="number"
+                                step="0.01"
+                                min="0"
                                 value={split.amount}
-                                onChange={(e) => updateCustomSplit(index, 'amount', e.target.value)}
-                                className={`pl-10 bg-slate-800 border-slate-700 text-white text-lg ${
-                                  getSplitValidationStatus(split.amount)?.status === 'error'
-                                    ? 'border-red-500 focus:ring-red-500'
-                                    : getSplitValidationStatus(split.amount)?.status === 'warning'
-                                    ? 'border-yellow-500 focus:ring-yellow-500'
-                                    : ''
+                                onChange={(e) => updateCustomSplit(index, e.target.value)}
+                                className={`bg-slate-800 border-slate-700 text-white ${
+                                  parseFloat(split.amount) > remainingAmount ? 'border-red-500' : ''
                                 }`}
                               />
                             </div>
@@ -690,12 +665,10 @@ export default function SplitBillPage() {
                   )}
                   {copied ? 'Copied!' : 'Copy'}
                 </Button>
-                {navigator.share && (
+                {canShare && (
                   <Button
                     onClick={() => {
-                      const amount = isCustomSplit ? results!.customAmounts![currentQRIndex].amount : results!.perPerson!
-                      const name = isCustomSplit ? results!.customAmounts![currentQRIndex].name : undefined
-                      const text = `Pay ${formatCurrency(amount)} to @${venmoId}${name ? ` (${name})` : ''} via Venmo`
+                      const text = `Pay ${formatCurrency(results?.perPerson)} to @${venmoId} via Venmo`
                       navigator.share({
                         title: 'Split Bill Payment',
                         text,
@@ -747,7 +720,7 @@ export default function SplitBillPage() {
                   )}
                   {copied ? 'Copied!' : 'Copy'}
                 </Button>
-                {navigator.share && (
+                {canShare && (
                   <Button
                     onClick={() => {
                       const text = `Pay ${formatCurrency(results?.perPerson)} to @${venmoId} via Venmo`
