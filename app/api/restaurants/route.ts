@@ -4,21 +4,11 @@ import { NextResponse } from 'next/server';
 interface Restaurant {
     id: string;
     name: string;
-    address: string;
     rating: number | null;
-    place_id: string;
-    photo: string | null;
     price_level: number | null;
-    cuisine: string;
-    dietary: string[];
     priceRange: string;
-    reviews: { text: string; author: string; rating: number }[];
     distance: number;
     vicinity: string;
-    opening_hours?: string[];
-    website?: string;
-    phone?: string;
-    user_ratings_total?: number;
 }
 
 interface NearbySearchParams {
@@ -61,15 +51,8 @@ const getRestaurantData = async (place_id: string, key: string): Promise<Omit<Re
         place_id,
         fields: [
             "name",
-            "formatted_address",
             "rating",
-            "price_level",
-            "photos",
-            "types",
-            "reviews",
-            "opening_hours",
-            "website",
-            "formatted_phone_number"
+            "price_level"
         ],
         key
     };
@@ -85,22 +68,8 @@ const getRestaurantData = async (place_id: string, key: string): Promise<Omit<Re
 
         return {
             name: result.name || '',
-            address: result.formatted_address || '',
             rating: result.rating || null,
             price_level: result.price_level || null,
-            photo: result.photos?.[0]?.photo_reference || null,
-            cuisine: result.types?.find(type => 
-                !['restaurant', 'food', 'point_of_interest', 'establishment'].includes(type)
-            ) || 'Restaurant',
-            dietary: extractDietaryOptions(result.types),
-            reviews: result.reviews?.map(review => ({
-                text: review.text || '',
-                author: review.author_name || '',
-                rating: review.rating || 0
-            })) || [],
-            opening_hours: result.opening_hours?.weekday_text,
-            website: result.website,
-            phone: result.formatted_phone_number
         };
     } catch (error) {
         console.error("Error fetching restaurant details:", error);
@@ -279,14 +248,11 @@ export async function GET(request: Request) {
 
                     return {
                         id: place.place_id,
-                        place_id: place.place_id,
                         ...details,
-                        phone: details.phone,
                         priceRange: '$'.repeat(details.price_level || 1),
                         distance,
-                        vicinity: place.vicinity || details.address,
-                        rating: details.rating || place.rating || null,
-                        user_ratings_total: place.user_ratings_total
+                        vicinity: place.vicinity || '',
+                        rating: details.rating || place.rating || null
                     };
                 } catch (error) {
                     console.error(`Error processing restaurant ${place.name}:`, error);
@@ -312,7 +278,10 @@ export async function GET(request: Request) {
             return ((a.distance || 0) - (b.distance || 0));
         });
 
-        return NextResponse.json(validRestaurants);
+        // Limit to 4 restaurants
+        const limitedRestaurants = validRestaurants.slice(0, 4);
+
+        return NextResponse.json(limitedRestaurants);
 
     } catch (error) {
         console.error("API Error:", error);
