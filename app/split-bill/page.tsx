@@ -18,12 +18,6 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip"
 
 export default function SplitBillPage() {
   const [totalAmount, setTotalAmount] = useState('')
@@ -47,11 +41,11 @@ export default function SplitBillPage() {
   const qrCodeRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [showDistributeButton, setShowDistributeButton] = useState(false)
-  const [canShare, setCanShare] = useState(false)
 
   useEffect(() => {
-    // Check if sharing is available
-    setCanShare(typeof navigator !== 'undefined' && !!navigator.share)
+    if (typeof navigator.share !== 'undefined') {
+      console.log('Web Share API is supported')
+    }
   }, [])
 
   const customSplitTotal = useMemo(() => {
@@ -72,12 +66,14 @@ export default function SplitBillPage() {
     setShowDistributeButton(shouldShowDistribute)
   }, [isCustomSplit, totalAmount, customSplits, remainingAmount]);
 
-  const addPerson = () => {
-    // Allow adding a new person at any time
-    setCustomSplits([
-      ...customSplits,
-      { name: '', amount: '' }
-    ])
+  const handleCustomSplitChange = (index: number, field: 'name' | 'amount', value: string) => {
+    const newSplits = [...customSplits]
+    newSplits[index] = { ...newSplits[index], [field]: value }
+    setCustomSplits(newSplits)
+  }
+
+  const handleAddPerson = () => {
+    setCustomSplits([...customSplits, { name: '', amount: '' }])
   }
 
   const removePerson = (index: number) => {
@@ -92,31 +88,6 @@ export default function SplitBillPage() {
     newSplits[index].amount = amount;
     setCustomSplits(newSplits);
   };
-
-  // Add this function to check if a split amount is valid
-  const getSplitValidationStatus = (amount: string) => {
-    if (!amount) return null
-    const numAmount = parseFloat(amount)
-    if (isNaN(numAmount)) return null
-
-    const equalSplit = parseFloat(totalAmount) / customSplits.length
-    
-    if (numAmount > parseFloat(totalAmount)) {
-      return {
-        status: 'error',
-        message: `Amount exceeds total bill by ${formatCurrency(numAmount - parseFloat(totalAmount))}`
-      }
-    }
-    
-    if (numAmount > equalSplit) {
-      return {
-        status: 'warning',
-        message: `Amount is higher than equal split (${formatCurrency(equalSplit)})`
-      }
-    }
-    
-    return null
-  }
 
   // Move the validation status check to a separate function
   const getOverallValidationStatus = () => {
@@ -457,7 +428,7 @@ export default function SplitBillPage() {
                   ))}
 
                   <Button
-                    onClick={addPerson}
+                    onClick={handleAddPerson}
                     variant="outline"
                     className="w-full border-dashed border-slate-700 text-slate-400 hover:text-white"
                   >

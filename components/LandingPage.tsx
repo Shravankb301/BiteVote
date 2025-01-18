@@ -6,8 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "./ui/badge"
-import { ArrowRight, Clock, Check, X, Sparkles, Pizza, Utensils } from 'lucide-react'
+import { ArrowRight, Clock, Check, X, Sparkles, Pizza, Utensils, Briefcase, GraduationCap, User, Twitter, Linkedin, PhoneCall } from 'lucide-react'
+import { LucideGithub } from 'lucide-react'
 import { motion } from "framer-motion"
+import Image from 'next/image'
+import Link from 'next/link'
 import {
   Dialog,
   DialogContent,
@@ -424,6 +427,9 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
               </Button>
             </div>
           </section>
+
+          {/* About Me Section */}
+          <AboutMeSection />
         </div>
       </div>
 
@@ -534,4 +540,106 @@ const bitVoteBenefits = [
   "Our algorithm considers everyone's preferences fairly",
   "Clear winner selection without endless discussion"
 ]
+
+function AboutMeSection() {
+  return (
+    <section id="about-me" className="relative py-24 border-t border-slate-800">
+      <div className="container mx-auto px-4">
+        <motion.h2 
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="text-3xl md:text-4xl font-bold text-center text-white mb-16"
+        >
+          About Me
+        </motion.h2>
+        <div className="grid md:grid-cols-2 gap-12 items-center">
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+            viewport={{ once: true }}
+          >
+            <Image
+              src="/58829827.jpeg"
+              width={400}
+              height={400}
+              alt="Shravan Komarabattini"
+              className="rounded-full mx-auto"
+            />
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, x: 50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5 }}
+            viewport={{ once: true }}
+          >
+            <h3 className="text-2xl font-bold text-white mb-4">Hello! I&apos;m Shravan Komarabattini</h3>
+            <p className="text-slate-300 mb-6">
+              An Engineer with a background in Computer Science and Mathematics from Purdue University. I specialize in building scalable, efficient solutions, from backend engineering and data to automating workflows and enhancing tasks with AI. My focus is on developing clean, impactful code and streamlining processes to drive user experience and business efficiency.
+
+              Outside of work, I'm passionate about continuous learning, exploring new tech, and maintaining a balanced routine with fitness and personal growth. Excited to connect, collaborate, and push the boundaries of tech innovation!
+            </p>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4">
+                <Briefcase className="text-blue-500 w-6 h-6" />
+                <span className="text-slate-300">Engineer at Swiss Re</span>
+              </div>
+              <div className="flex items-center space-x-4">
+                <GraduationCap className="text-blue-500 w-6 h-6" />
+                <span className="text-slate-300">BS in Computer Science & Mathematics, Purdue University</span>
+              </div>
+              <div className="flex items-center space-x-4">
+                <User className="text-blue-500 w-6 h-6" />
+                <span className="text-slate-300">Engineering, Product & AI Enthusiast</span>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+        <motion.div 
+          className="mt-12 text-center"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          viewport={{ once: true }}
+        >
+          <div className="flex flex-wrap justify-center gap-4">
+            <Link href="https://x.com/shravankb301" target="_blank" rel="noopener noreferrer">
+              <Button 
+                className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 py-5 text-base rounded-full group shadow-lg shadow-purple-500/25"
+              >
+                <Twitter className="mr-2 h-5 w-5" />
+                Follow on X
+              </Button>
+            </Link>
+            <Link href="https://www.linkedin.com/in/shravan-komarabattini/" target="_blank" rel="noopener noreferrer">
+              <Button 
+                className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 py-5 text-base rounded-full group shadow-lg shadow-purple-500/25"
+              >
+                <Linkedin className="mr-2 h-5 w-5" />
+                Connect on LinkedIn
+              </Button>
+            </Link>
+            <Link href="https://github.com/Shravankb301" target="_blank" rel="noopener noreferrer">
+              <Button 
+                className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 py-5 text-base rounded-full group shadow-lg shadow-purple-500/25"
+              >
+                <LucideGithub className="mr-2 h-5 w-5" /> 
+                Check out Github
+              </Button>
+            </Link>
+            <Link href="https://calendly.com/shravankb/1-1" target="_blank" rel="noopener noreferrer">
+              <Button 
+                className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 py-5 text-base rounded-full group shadow-lg shadow-purple-500/25"
+              >
+                <PhoneCall className="mr-2 h-5 w-5" /> 
+                Schedule a call
+              </Button>
+            </Link>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  )
+}
 

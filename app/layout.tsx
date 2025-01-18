@@ -16,9 +16,8 @@ export const metadata: Metadata = {
   description: 'Decide where to eat with your team',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover',
   themeColor: '#1e1b4b',
-  appleWebAppCapable: 'yes',
   formatDetection: {
-    telephone: 'no',
+    telephone: false,
   },
 }
 
