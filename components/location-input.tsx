@@ -20,6 +20,7 @@ export function LocationInput({ onLocationSelect, className, autoDetectOnMount =
     const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [locationPermission, setLocationPermission] = useState<PermissionState | null>(null);
     const [hasAttemptedAutoDetect, setHasAttemptedAutoDetect] = useState(false);
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
     const { toast } = useToast();
 
     const getCurrentLocation = useCallback(() => {
@@ -186,18 +187,32 @@ export function LocationInput({ onLocationSelect, className, autoDetectOnMount =
                                 setSearchQuery(e.target.value);
                                 setError(null);
                             }}
-                            className="pl-10 bg-slate-900/30 border-slate-700/50 text-white 
-                                     focus:border-blue-500/50 focus:ring-purple-500/20 transition-all duration-300
-                                     hover:bg-slate-900/50"
+                            onFocus={() => setIsSearchFocused(true)}
+                            onBlur={() => {
+                                if (!searchQuery) {
+                                    setIsSearchFocused(false);
+                                }
+                            }}
+                            className={cn(
+                                "pl-10 bg-slate-900/30 border-slate-700/50 text-white",
+                                "focus:border-blue-500/50 focus:ring-purple-500/20 transition-all duration-300",
+                                "hover:bg-slate-900/50",
+                                isSearchFocused ? "w-[300px]" : "w-[200px]"
+                            )}
                             disabled={isLoading}
                         />
-                        {!currentLocation && (
+                        {!currentLocation && !isSearchFocused && (
                             <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-slate-400">
                                 Press 📍 to detect
                             </div>
                         )}
                     </div>
                 </form>
+                {currentLocation && !isSearchFocused && (
+                    <div className="text-sm text-blue-400/80 animate-pulse mt-1">
+                        Try searching for "Italian" ☕️, "Sushi" 🍱, or your favorite cuisine! 
+                    </div>
+                )}
                 <Button
                     variant="outline"
                     size="icon"

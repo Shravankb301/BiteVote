@@ -18,6 +18,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 export default function SplitBillPage() {
   const [totalAmount, setTotalAmount] = useState('')
@@ -40,12 +46,7 @@ export default function SplitBillPage() {
   const [currentQRIndex, setCurrentQRIndex] = useState(0)
   const qrCodeRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    if (isCustomSplit && totalAmount && customSplits.length === 1) {
-      setCustomSplits([{ name: customSplits[0].name, amount: totalAmount }])
-    }
-  }, [isCustomSplit, totalAmount])
+  const [showDistributeButton, setShowDistributeButton] = useState(false)
 
   const customSplitTotal = useMemo(() => {
     return customSplits.reduce((sum, split) => sum + (parseFloat(split.amount) || 0), 0)
@@ -57,29 +58,29 @@ export default function SplitBillPage() {
     return Math.max(0, total - customSplitTotal)
   }, [totalAmount, customSplitTotal])
 
+  useEffect(() => {
+    // Only update when switching to custom split mode
+    if (isCustomSplit && totalAmount && customSplits.length === 1 && !customSplits[0].amount) {
+      setCustomSplits([{ name: customSplits[0].name, amount: totalAmount }])
+    }
+  }, [isCustomSplit, totalAmount])
+
+  useEffect(() => {
+    // Handle distribute button visibility
+    const shouldShowDistribute = remainingAmount > 0 && remainingAmount < 1 && customSplits.some(split => parseFloat(split.amount) > 0)
+    setShowDistributeButton(shouldShowDistribute)
+  }, [remainingAmount, customSplits])
+
   const isOverBudget = useMemo(() => {
     if (!totalAmount) return false
     return customSplitTotal > parseFloat(totalAmount)
   }, [totalAmount, customSplitTotal])
 
   const addPerson = () => {
-    // Check if the first person has a valid amount
-    const firstPersonAmount = parseFloat(customSplits[0].amount)
-    if (isNaN(firstPersonAmount) || firstPersonAmount <= 0) {
-      alert('Please enter an amount for the first person before adding more people')
-      return
-    }
-
-    const newAmount = remainingAmount.toFixed(2)
-    // Only add new person if there's remaining amount
-    if (parseFloat(newAmount) <= 0) {
-      alert('No remaining amount to split')
-      return
-    }
-
+    // Allow adding a new person at any time
     setCustomSplits([
-      ...customSplits.map(split => ({ ...split })),
-      { name: '', amount: newAmount }
+      ...customSplits,
+      { name: '', amount: '' }
     ])
   }
 
@@ -113,30 +114,69 @@ export default function SplitBillPage() {
 
       newSplits[index][field] = value
       setCustomSplits(newSplits)
-
-      // Calculate if we should auto-add a new person
-      const currentTotal = newSplits.reduce((sum, split) => {
-        const amount = parseFloat(split.amount) || 0
-        return sum + amount
-      }, 0)
-
-      const billTotal = parseFloat(totalAmount || '0')
-      const remaining = billTotal - currentTotal
-
-      // If there's still amount to split and this is a valid entry, add a new person
-      if (remaining > 0 && !isNaN(numValue) && numValue > 0) {
-        // Add new person with remaining amount
-        setTimeout(() => {
-          setCustomSplits([
-            ...newSplits,
-            { name: '', amount: remaining.toFixed(2) }
-          ])
-        }, 100) // Small delay to ensure smooth UI update
-      }
     } else {
       newSplits[index][field] = value
       setCustomSplits(newSplits)
     }
+  }
+
+  // Add this function to check if a split amount is valid
+  const getSplitValidationStatus = (amount: string) => {
+    if (!amount) return null
+    const numAmount = parseFloat(amount)
+    if (isNaN(numAmount)) return null
+
+    const equalSplit = parseFloat(totalAmount) / customSplits.length
+    
+    if (numAmount > parseFloat(totalAmount)) {
+      return {
+        status: 'error',
+        message: `Amount exceeds total bill by ${formatCurrency(numAmount - parseFloat(totalAmount))}`
+      }
+    }
+    
+    if (numAmount > equalSplit) {
+      return {
+        status: 'warning',
+        message: `Amount is higher than equal split (${formatCurrency(equalSplit)})`
+      }
+    }
+    
+    return null
+  }
+
+  // Move the validation status check to a separate function
+  const getOverallValidationStatus = () => {
+    if (!totalAmount) return null
+    
+    const total = parseFloat(totalAmount)
+    const currentTotal = customSplits.reduce((sum, split) => {
+      const amount = parseFloat(split.amount) || 0
+      return sum + amount
+    }, 0)
+    
+    if (Math.abs(currentTotal - total) < 0.01) {
+      return {
+        status: 'success',
+        message: 'Perfect split! All amounts add up to the total.'
+      }
+    }
+    
+    if (currentTotal > total) {
+      return {
+        status: 'error',
+        message: `Total split amount exceeds the bill total by ${formatCurrency(currentTotal - total)}`
+      }
+    }
+    
+    if (currentTotal < total && currentTotal > 0) {
+      return {
+        status: 'warning',
+        message: `Still need to allocate ${formatCurrency(total - currentTotal)}`
+      }
+    }
+    
+    return null
   }
 
   const calculateSplit = () => {
@@ -146,9 +186,13 @@ export default function SplitBillPage() {
     const total = amount + tipAmount
 
     if (isCustomSplit) {
-      // Validate total matches
-      if (Math.abs(customSplitTotal - parseFloat(totalAmount)) > 0.01) {
-        alert('The sum of individual amounts must equal the total bill amount')
+      // Validate total matches with a small tolerance for floating point errors
+      const tolerance = 0.01
+      const difference = Math.abs(customSplitTotal - parseFloat(totalAmount))
+      
+      if (difference > tolerance) {
+        const remaining = parseFloat(totalAmount) - customSplitTotal
+        alert(`The sum of individual amounts ${remaining > 0 ? 'is less than' : 'exceeds'} the total bill amount by ${formatCurrency(Math.abs(remaining))}. Please adjust the amounts to match the total.`)
         setIsCalculating(false)
         return
       }
@@ -261,6 +305,27 @@ export default function SplitBillPage() {
     }
   }
 
+  const distributeRemainder = () => {
+    if (remainingAmount <= 0) return
+
+    const newSplits = [...customSplits]
+    const validSplits = newSplits.filter(split => parseFloat(split.amount) > 0)
+    
+    if (validSplits.length === 0) return
+
+    // Distribute remainder equally among participants with non-zero amounts
+    const remainderPerPerson = (remainingAmount / validSplits.length).toFixed(2)
+    
+    newSplits.forEach((split, index) => {
+      if (parseFloat(split.amount) > 0) {
+        const currentAmount = parseFloat(split.amount)
+        newSplits[index].amount = (currentAmount + parseFloat(remainderPerPerson)).toFixed(2)
+      }
+    })
+
+    setCustomSplits(newSplits)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-violet-950 via-indigo-950 to-slate-950">
       <div className="container mx-auto px-4 py-16">
@@ -339,26 +404,49 @@ export default function SplitBillPage() {
                   <Label className="text-white">Custom Amounts</Label>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-slate-400">Total Bill: {formatCurrency(parseFloat(totalAmount) || 0)}</span>
-                    <span className="text-sm text-slate-400">
-                      Remaining: {formatCurrency(remainingAmount)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-slate-400">
+                        Sum: {formatCurrency(customSplitTotal)}
+                      </span>
+                      {remainingAmount !== 0 && (
+                        <span className={`text-sm font-medium ${
+                          remainingAmount > 0 ? 'text-yellow-500' : 'text-red-500'
+                        }`}>
+                          ({remainingAmount > 0 ? '+' : ''}{formatCurrency(remainingAmount)})
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  
-                  {isOverBudget && (
-                    <Alert variant="destructive" className="bg-red-900/50 border-red-500">
+
+                  {getOverallValidationStatus() && (
+                    <Alert 
+                      variant={
+                        getOverallValidationStatus()?.status === 'error' ? 'destructive' :
+                        getOverallValidationStatus()?.status === 'warning' ? 'default' :
+                        'default'
+                      }
+                      className={
+                        getOverallValidationStatus()?.status === 'error' ? 'bg-red-900/50 border-red-500' :
+                        getOverallValidationStatus()?.status === 'warning' ? 'bg-yellow-900/50 border-yellow-500' :
+                        'bg-green-900/50 border-green-500 text-green-200'
+                      }
+                    >
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
-                        Total split amount exceeds the bill total
+                        {getOverallValidationStatus()?.message}
                       </AlertDescription>
                     </Alert>
                   )}
 
-                  {remainingAmount === 0 && !isOverBudget && customSplitTotal > 0 && (
-                    <Alert className="bg-green-900/50 border-green-500 text-green-200">
-                      <AlertDescription>
-                        Perfect split! All amounts add up to the total.
-                      </AlertDescription>
-                    </Alert>
+                  {showDistributeButton && (
+                    <Button
+                      onClick={distributeRemainder}
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-yellow-500 border-yellow-500/50 hover:bg-yellow-500/10"
+                    >
+                      Distribute {formatCurrency(remainingAmount)} equally
+                    </Button>
                   )}
 
                   {customSplits.map((split, index) => (
@@ -369,22 +457,35 @@ export default function SplitBillPage() {
                         onChange={(e) => updateCustomSplit(index, 'name', e.target.value)}
                         className="bg-slate-800 border-slate-700 text-white w-[70%]"
                       />
-                      <div className="relative w-[30%]">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                        <Input
-                          type="text"
-                          inputMode="decimal"
-                          pattern="[0-9]*[.]?[0-9]*"
-                          placeholder="0.00"
-                          value={split.amount}
-                          onChange={(e) => updateCustomSplit(index, 'amount', e.target.value)}
-                          className={`pl-10 bg-slate-800 border-slate-700 text-white text-lg ${
-                            parseFloat(split.amount) > remainingAmount + parseFloat(split.amount) 
-                              ? 'border-red-500' 
-                              : ''
-                          }`}
-                        />
-                      </div>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="relative w-[30%]">
+                              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                              <Input
+                                type="text"
+                                inputMode="decimal"
+                                pattern="[0-9]*[.]?[0-9]*"
+                                placeholder="0.00"
+                                value={split.amount}
+                                onChange={(e) => updateCustomSplit(index, 'amount', e.target.value)}
+                                className={`pl-10 bg-slate-800 border-slate-700 text-white text-lg ${
+                                  getSplitValidationStatus(split.amount)?.status === 'error'
+                                    ? 'border-red-500 focus:ring-red-500'
+                                    : getSplitValidationStatus(split.amount)?.status === 'warning'
+                                    ? 'border-yellow-500 focus:ring-yellow-500'
+                                    : ''
+                                }`}
+                              />
+                            </div>
+                          </TooltipTrigger>
+                          {getSplitValidationStatus(split.amount) && (
+                            <TooltipContent>
+                              <p>{getSplitValidationStatus(split.amount)?.message}</p>
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </TooltipProvider>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -401,7 +502,6 @@ export default function SplitBillPage() {
                     onClick={addPerson}
                     variant="outline"
                     className="w-full border-dashed border-slate-700 text-slate-400 hover:text-white"
-                    disabled={remainingAmount === 0}
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Person

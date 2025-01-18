@@ -381,16 +381,6 @@ export default function RandomizerPage() {
                     </span>
                   )}
                 </Button>
-
-                <Button
-                  onClick={() => setShowAddDialog(true)}
-                  variant="outline"
-                  size="lg"
-                  className="border-slate-700 hover:bg-slate-800"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Custom
-                </Button>
               </div>
             </motion.div>
           ) : null}
