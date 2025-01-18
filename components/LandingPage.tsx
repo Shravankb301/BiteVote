@@ -578,7 +578,7 @@ function AboutMeSection() {
             <p className="text-slate-300 mb-6">
               An Engineer with a background in Computer Science and Mathematics from Purdue University. I specialize in building scalable, efficient solutions, from backend engineering and data to automating workflows and enhancing tasks with AI. My focus is on developing clean, impactful code and streamlining processes to drive user experience and business efficiency.
 
-              Outside of work, I'm passionate about continuous learning, exploring new tech, and maintaining a balanced routine with fitness and personal growth. Excited to connect, collaborate, and push the boundaries of tech innovation!
+              Outside of work, I&apos;m passionate about continuous learning, exploring new tech, and maintaining a balanced routine with fitness and personal growth. Excited to connect, collaborate, and push the boundaries of tech innovation!
             </p>
             <div className="space-y-4">
               <div className="flex items-center space-x-4">

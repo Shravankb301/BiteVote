@@ -66,12 +66,6 @@ export default function SplitBillPage() {
     setShowDistributeButton(shouldShowDistribute)
   }, [isCustomSplit, totalAmount, customSplits, remainingAmount]);
 
-  const handleCustomSplitChange = (index: number, field: 'name' | 'amount', value: string) => {
-    const newSplits = [...customSplits]
-    newSplits[index] = { ...newSplits[index], [field]: value }
-    setCustomSplits(newSplits)
-  }
-
   const handleAddPerson = () => {
     setCustomSplits([...customSplits, { name: '', amount: '' }])
   }
