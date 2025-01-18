@@ -224,6 +224,23 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                           </motion.div>
                         </Button>
                       </motion.div>
+                      <motion.div
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        <Button 
+                          onClick={() => router.push('/split-bill')}
+                          className="relative bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-8 py-6 text-lg rounded-full group shadow-lg shadow-purple-500/25"
+                        >
+                          Split the bill
+                          <motion.div
+                            animate={{ x: [0, 5, 0] }}
+                            transition={{ repeat: Infinity, duration: 1.5 }}
+                          >
+                            <ArrowRight className="ml-2 h-5 w-5" />
+                          </motion.div>
+                        </Button>
+                      </motion.div>
                     </div>
                   </motion.div>
                 </div>
