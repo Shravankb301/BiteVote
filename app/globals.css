@@ -2,13 +2,106 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Add these styles at the top of your globals.css */
+/* Base styles with mobile-first approach */
 html, body {
   overflow-x: hidden;
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 116, 139, 0.5) transparent;
   min-height: 100%;
   height: auto;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* Improved mobile scrolling */
+@supports (-webkit-overflow-scrolling: touch) {
+  body {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Responsive container utilities */
+@layer utilities {
+  .container-fluid {
+    @apply w-full px-4 mx-auto;
+    max-width: 100%;
+  }
+  
+  .container-sm {
+    @apply container-fluid;
+    @screen sm { max-width: 640px; }
+  }
+  
+  .container-md {
+    @apply container-fluid;
+    @screen md { max-width: 768px; }
+  }
+  
+  .container-lg {
+    @apply container-fluid;
+    @screen lg { max-width: 1024px; }
+  }
+  
+  .container-xl {
+    @apply container-fluid;
+    @screen xl { max-width: 1280px; }
+  }
+}
+
+/* Responsive text utilities */
+@layer utilities {
+  .text-responsive {
+    @apply text-base md:text-lg lg:text-xl;
+  }
+  
+  .text-responsive-lg {
+    @apply text-lg md:text-xl lg:text-2xl;
+  }
+  
+  .text-responsive-xl {
+    @apply text-xl md:text-2xl lg:text-3xl;
+  }
+  
+  .text-responsive-2xl {
+    @apply text-2xl md:text-3xl lg:text-4xl;
+  }
+}
+
+/* Responsive spacing utilities */
+@layer utilities {
+  .spacing-responsive {
+    @apply p-4 md:p-6 lg:p-8;
+  }
+  
+  .spacing-responsive-x {
+    @apply px-4 md:px-6 lg:px-8;
+  }
+  
+  .spacing-responsive-y {
+    @apply py-4 md:py-6 lg:py-8;
+  }
+}
+
+/* Mobile touch target sizes */
+@layer utilities {
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  .touch-target-lg {
+    @apply min-h-[48px] min-w-[48px];
+  }
+}
+
+/* Safe area insets for notched devices */
+@supports(padding: max(0px)) {
+  .safe-padding-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 1rem);
+  }
+  
+  .safe-padding-top {
+    padding-top: max(env(safe-area-inset-top), 1rem);
+  }
 }
 
 html::-webkit-scrollbar {

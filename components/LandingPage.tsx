@@ -48,7 +48,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
   return (
     <>
       <div className="min-h-screen bg-gradient-to-b from-violet-950 via-slate-900 to-slate-950 overflow-y-auto">
-        {/* Optimized background elements */}
+        {/* Background elements */}
         <div className="fixed inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] pointer-events-none translate-z-0" />
         <div className="fixed inset-0 pointer-events-none translate-z-0">
           <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob will-change-transform" />
@@ -56,9 +56,8 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
           <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob animation-delay-4000 will-change-transform" />
         </div>
         
-        {/* Content sections with optimized animations */}
+        {/* Content sections */}
         <div className="relative content-visible">
-          {/* Hero Section */}
           <motion.div
             initial="hidden"
             animate="visible"
@@ -72,7 +71,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
               },
             }}
           >
-            <section className="relative container mx-auto px-4 pt-32 pb-20">
+            <section className="relative container mx-auto px-4 pt-20 md:pt-32 pb-12 md:pb-20">
               <motion.div 
                 variants={{
                   hidden: { opacity: 0, y: 10 },
@@ -97,15 +96,15 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                     stiffness: 200
                   }}
                 >
-                  <Badge className="mb-4 bg-blue-500/10 text-blue-500 border-blue-500/20 py-2 px-4 animate-pulse">
-                    <Sparkles className="w-4 h-4 mr-2 inline-block animate-spin-slow" />
+                  <Badge className="mb-4 bg-blue-500/10 text-blue-500 border-blue-500/20 py-1.5 md:py-2 px-3 md:px-4 text-sm md:text-base animate-pulse">
+                    <Sparkles className="w-3 h-3 md:w-4 md:h-4 mr-1.5 md:mr-2 inline-block animate-spin-slow" />
                     Stop the endless group chat debates
                   </Badge>
                 </motion.div>
 
                 <div className="relative">
                   <motion.h1 
-                    className="text-7xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500"
+                    className="text-4xl md:text-6xl lg:text-7xl font-bold mb-4 md:mb-6 bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2, duration: 0.5 }}
@@ -117,20 +116,20 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                         &ldquo;What do you want to eat?&rdquo;
                       </span>
                       <motion.div
-                        className="absolute -right-8 -top-6"
+                        className="absolute -right-6 md:-right-8 -top-4 md:-top-6"
                         initial={{ rotate: -10, scale: 0 }}
                         animate={{ rotate: 10, scale: 1 }}
                         transition={{ delay: 0.5, duration: 0.5 }}
                       >
-                        <Pizza className="w-8 h-8 text-yellow-400" />
+                        <Pizza className="w-6 h-6 md:w-8 md:h-8 text-yellow-400" />
                       </motion.div>
                       <motion.div
-                        className="absolute -left-8 -bottom-4"
+                        className="absolute -left-6 md:-left-8 -bottom-3 md:-bottom-4"
                         initial={{ rotate: 10, scale: 0 }}
                         animate={{ rotate: -10, scale: 1 }}
                         transition={{ delay: 0.7, duration: 0.5 }}
                       >
-                        <Utensils className="w-6 h-6 text-blue-400" />
+                        <Utensils className="w-5 h-5 md:w-6 md:h-6 text-blue-400" />
                       </motion.div>
                     </span>
                   </motion.h1>
@@ -140,11 +139,11 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.4, duration: 0.5 }}
-                      className="flex flex-col items-center text-xl text-slate-300 mb-12 max-w-2xl mx-auto space-y-4"
+                      className="flex flex-col items-center text-base md:text-xl text-slate-300 mb-8 md:mb-12 max-w-2xl mx-auto space-y-3 md:space-y-4"
                     >
-                      <div className="flex flex-wrap items-center justify-center gap-2">
+                      <div className="flex flex-wrap items-center justify-center gap-1.5 md:gap-2 px-4">
                         <motion.span
-                          className="relative inline-flex items-center text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500"
+                          className="relative inline-flex items-center text-xl md:text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500"
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: 0.6 }}
@@ -152,7 +151,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                           Effortless dining decisions,
                         </motion.span>
                         <motion.span
-                          className="relative inline-flex items-center text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500"
+                          className="relative inline-flex items-center text-xl md:text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500"
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: 0.8 }}
@@ -160,7 +159,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                           zero debates,
                         </motion.span>
                         <motion.span
-                          className="relative inline-flex items-center text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-500"
+                          className="relative inline-flex items-center text-xl md:text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-500"
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
                           transition={{ delay: 1 }}
@@ -169,14 +168,14 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                         </motion.span>
                       </div>
                       <div className="flex items-center justify-center gap-2">
-                        <span className="text-lg text-slate-400">
+                        <span className="text-base md:text-lg text-slate-400">
                           From indecision to satisfaction in minutes
                         </span>
                         <motion.div
                           animate={{ rotate: [0, 10, -10, 0] }}
                           transition={{ repeat: Infinity, duration: 1.5 }}
                         >
-                          <Pizza className="w-5 h-5 text-yellow-400 inline-block" />
+                          <Pizza className="w-4 h-4 md:w-5 md:h-5 text-yellow-400 inline-block" />
                         </motion.div>
                       </div>
                     </motion.div>
@@ -188,56 +187,59 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.6, duration: 0.5 }}
                   >
-                    <div className="relative inline-flex gap-4">
+                    <div className="relative flex flex-col sm:flex-row gap-3 md:gap-4 justify-center items-center">
                       <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full blur-xl opacity-50 animate-pulse" />
                       <motion.div
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
+                        className="w-full sm:w-auto"
                       >
                         <Button 
                           onClick={() => router.push('/group')}
-                          className="relative bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-8 py-6 text-lg rounded-full group shadow-lg shadow-purple-500/25"
+                          className="relative w-full sm:w-auto bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 md:px-8 py-5 md:py-6 text-base md:text-lg rounded-full group shadow-lg shadow-purple-500/25"
                         >
                           Pick your restaurants
                           <motion.div
                             animate={{ x: [0, 5, 0] }}
                             transition={{ repeat: Infinity, duration: 1.5 }}
                           >
-                            <ArrowRight className="ml-2 h-5 w-5" />
+                            <ArrowRight className="ml-2 h-4 w-4 md:h-5 md:w-5" />
                           </motion.div>
                         </Button>
                       </motion.div>
                       <motion.div
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
+                        className="w-full sm:w-auto"
                       >
                         <Button 
                           onClick={() => router.push('/split-bill')}
-                          className="relative bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-8 py-6 text-lg rounded-full group shadow-lg shadow-purple-500/25"
+                          className="relative w-full sm:w-auto bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 md:px-8 py-5 md:py-6 text-base md:text-lg rounded-full group shadow-lg shadow-purple-500/25"
                         >
                           Split the bill
                           <motion.div
                             animate={{ x: [0, 5, 0] }}
                             transition={{ repeat: Infinity, duration: 1.5 }}
                           >
-                            <ArrowRight className="ml-2 h-5 w-5" />
+                            <ArrowRight className="ml-2 h-4 w-4 md:h-5 md:w-5" />
                           </motion.div>
                         </Button>
                       </motion.div>
                       <motion.div
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
+                        className="w-full sm:w-auto"
                       >
                         <Button 
                           onClick={() => router.push('/randomizer')}
-                          className="relative bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-8 py-6 text-lg rounded-full group shadow-lg shadow-purple-500/25"
+                          className="relative w-full sm:w-auto bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 md:px-8 py-5 md:py-6 text-base md:text-lg rounded-full group shadow-lg shadow-purple-500/25"
                         >
                           Randomizer
                           <motion.div
                             animate={{ x: [0, 5, 0] }}
                             transition={{ repeat: Infinity, duration: 1.5 }}
                           >
-                            <ArrowRight className="ml-2 h-5 w-5" />
+                            <ArrowRight className="ml-2 h-4 w-4 md:h-5 md:w-5" />
                           </motion.div>
                         </Button>
                       </motion.div>

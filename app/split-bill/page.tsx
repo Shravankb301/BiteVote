@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calculator, DollarSign, Users, Receipt, Split, Share2, Plus, Minus, AlertCircle, ChevronLeft, ChevronRight, Download, Copy, Check } from 'lucide-react'
+import { Calculator, DollarSign, Users, Receipt, Split, Share2, Plus, Minus, AlertCircle, ChevronLeft, ChevronRight, Download, Copy, Check, X } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -218,31 +218,13 @@ export default function SplitBillPage() {
       alert('Please enter a Venmo ID to generate payment QR code');
       return;
     }
-
-    if (canShare) {
-      try {
-        const shareText = isCustomSplit 
-          ? `Split bill payment details for ${results.customAmounts?.[0]?.name}. Amount: ${formatCurrency(results.customAmounts?.[0]?.amount)}. Pay to Venmo: ${venmoId}`
-          : `Your share is ${formatCurrency(results.perPerson)}. Pay to Venmo: ${venmoId}`;
-
-        await navigator.share({
-          title: 'Split Bill Payment',
-          text: shareText,
-          url: window.location.href
-        });
-      } catch (error) {
-        console.error('Error sharing:', error);
-        setShowQRDialog(true);
-      }
-    } else {
-      setShowQRDialog(true);
-    }
+    setShowQRDialog(true);
   }
 
   const handleCustomSplitToggle = (checked: boolean) => {
     setIsCustomSplit(checked)
     if (checked && totalAmount) {
-      // When enabling custom split, set first person with empty values
+      // When enabling custom split, initialize with the total amount
       setCustomSplits([{ name: '', amount: totalAmount }])
     } else {
       setCustomSplits([{ name: '', amount: '' }])
@@ -435,32 +417,33 @@ export default function SplitBillPage() {
                           newSplits[index].name = e.target.value;
                           setCustomSplits(newSplits);
                         }}
-                        className="bg-slate-800 border-slate-700 text-white"
+                        className="bg-slate-800 border-slate-700 text-white flex-1"
                       />
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="relative w-[30%]">
-                              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-                              <Input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={split.amount}
-                                onChange={(e) => updateCustomSplit(index, e.target.value)}
-                                className={`bg-slate-800 border-slate-700 text-white ${
-                                  parseFloat(split.amount) > remainingAmount ? 'border-red-500' : ''
-                                }`}
-                              />
-                            </div>
-                          </TooltipTrigger>
-                          {getSplitValidationStatus(split.amount) && (
-                            <TooltipContent>
-                              <p>{getSplitValidationStatus(split.amount)?.message}</p>
-                            </TooltipContent>
-                          )}
-                        </Tooltip>
-                      </TooltipProvider>
+                      <div className="relative w-1/3">
+                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0.00"
+                          value={split.amount}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/[^0-9.]/g, '');
+                            if (value === '' || /^\d*\.?\d{0,2}$/.test(value)) {
+                              updateCustomSplit(index, value);
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const value = e.target.value;
+                            if (value) {
+                              const formattedValue = parseFloat(value).toFixed(2);
+                              updateCustomSplit(index, formattedValue);
+                            }
+                          }}
+                          className={`pl-10 bg-slate-800 border-slate-700 text-white ${
+                            parseFloat(split.amount) > parseFloat(totalAmount) ? 'border-red-500' : ''
+                          }`}
+                        />
+                      </div>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -581,26 +564,38 @@ export default function SplitBillPage() {
 
       <Dialog open={showQRDialog} onOpenChange={setShowQRDialog}>
         <DialogContent className="sm:max-w-[425px] bg-slate-900 border-slate-800">
+          <div className="absolute right-4 top-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowQRDialog(false)}
+              className="text-slate-400 hover:text-white rounded-full hover:bg-slate-800"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
           <DialogHeader>
-            <DialogTitle className="text-white">Venmo Payment QR Code</DialogTitle>
+            <DialogTitle className="text-white">Payment QR Code</DialogTitle>
             <DialogDescription className="text-slate-400">
-              {isCustomSplit ? "Scan the QR code for your payment" : "Scan this QR code to pay via Venmo"}
+              {isCustomSplit 
+                ? "Scan or share this QR code to pay your share" 
+                : "Scan or share this QR code to make the payment"}
             </DialogDescription>
           </DialogHeader>
-          {isCustomSplit && results?.customAmounts ? (
+          {isCustomSplit && results?.customAmounts && results.customAmounts.length > 0 ? (
             <div className="relative">
-              <div className="space-y-6" ref={qrCodeRef}>
+              <div className="space-y-4" ref={qrCodeRef}>
                 <div className="text-center">
                   <h3 className="text-lg font-semibold text-white">
-                    {results.customAmounts[currentQRIndex].name}
+                    {results.customAmounts[currentQRIndex]?.name || 'Anonymous'}
                   </h3>
                   <p className="text-slate-400">
-                    {formatCurrency(results.customAmounts[currentQRIndex].amount)}
+                    {formatCurrency(results.customAmounts[currentQRIndex]?.amount)}
                   </p>
                 </div>
                 <div className="flex flex-col items-center justify-center p-4 bg-white rounded-lg">
                   <QRCodeSVG
-                    value={generatePaymentData(results.customAmounts[currentQRIndex].amount)}
+                    value={generatePaymentData(results.customAmounts[currentQRIndex]?.amount || 0)}
                     size={200}
                     level="H"
                     includeMargin={true}
@@ -608,81 +603,38 @@ export default function SplitBillPage() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between mt-4">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setCurrentQRIndex((prev) => (prev - 1 + results.customAmounts!.length) % results.customAmounts!.length)}
-                  disabled={results.customAmounts.length <= 1}
-                  className="text-slate-400 hover:text-white"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="flex space-x-2">
-                  {results.customAmounts.map((_, index) => (
-                    <div
-                      key={index}
-                      className={`h-2 w-2 rounded-full transition-colors ${
-                        index === currentQRIndex ? 'bg-white' : 'bg-slate-600'
-                      }`}
-                      onClick={() => setCurrentQRIndex(index)}
-                      style={{ cursor: 'pointer' }}
-                    />
-                  ))}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setCurrentQRIndex((prev) => (prev + 1) % results.customAmounts!.length)}
-                  disabled={results.customAmounts.length <= 1}
-                  className="text-slate-400 hover:text-white"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="flex justify-center gap-2 mt-4">
-                <Button
-                  onClick={downloadQRCode}
-                  variant="outline"
-                  className="text-slate-400 hover:text-white"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
-                <Button
-                  onClick={() => copyToClipboard(
-                    isCustomSplit ? results!.customAmounts![currentQRIndex].amount : results!.perPerson!,
-                    isCustomSplit ? results!.customAmounts![currentQRIndex].name : undefined
-                  )}
-                  variant="outline"
-                  className="text-slate-400 hover:text-white"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 mr-2" />
-                  ) : (
-                    <Copy className="h-4 w-4 mr-2" />
-                  )}
-                  {copied ? 'Copied!' : 'Copy'}
-                </Button>
-                {canShare && (
+              {results.customAmounts.length > 1 && (
+                <div className="flex items-center justify-between mt-4">
                   <Button
-                    onClick={() => {
-                      const text = `Pay ${formatCurrency(results?.perPerson)} to @${venmoId} via Venmo`
-                      navigator.share({
-                        title: 'Split Bill Payment',
-                        text,
-                        url: window.location.href
-                      })
-                    }}
-                    variant="outline"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setCurrentQRIndex((prev) => (prev - 1 + results.customAmounts!.length) % results.customAmounts!.length)}
                     className="text-slate-400 hover:text-white"
                   >
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share
+                    <ChevronLeft className="h-4 w-4" />
                   </Button>
-                )}
-              </div>
+                  <div className="flex space-x-2">
+                    {results.customAmounts.map((_, index) => (
+                      <div
+                        key={index}
+                        className={`h-2 w-2 rounded-full transition-colors ${
+                          index === currentQRIndex ? 'bg-white' : 'bg-slate-600'
+                        }`}
+                        onClick={() => setCurrentQRIndex(index)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    ))}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setCurrentQRIndex((prev) => (prev + 1) % results.customAmounts!.length)}
+                    className="text-slate-400 hover:text-white"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -694,52 +646,44 @@ export default function SplitBillPage() {
                   includeMargin={true}
                 />
               </div>
-              <div className="text-center text-slate-400">
-                <p>Pay to: @{venmoId}</p>
-                <p>Amount: {results ? formatCurrency(results.perPerson) : '$0.00'}</p>
-                <p className="text-sm">Generated on {new Date().toLocaleDateString()}</p>
-              </div>
-              <div className="flex justify-center gap-2">
-                <Button
-                  onClick={downloadQRCode}
-                  variant="outline"
-                  className="text-slate-400 hover:text-white"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
-                <Button
-                  onClick={() => copyToClipboard(results?.perPerson || 0)}
-                  variant="outline"
-                  className="text-slate-400 hover:text-white"
-                >
-                  {copied ? (
-                    <Check className="h-4 w-4 mr-2" />
-                  ) : (
-                    <Copy className="h-4 w-4 mr-2" />
-                  )}
-                  {copied ? 'Copied!' : 'Copy'}
-                </Button>
-                {canShare && (
-                  <Button
-                    onClick={() => {
-                      const text = `Pay ${formatCurrency(results?.perPerson)} to @${venmoId} via Venmo`
-                      navigator.share({
-                        title: 'Split Bill Payment',
-                        text,
-                        url: window.location.href
-                      })
-                    }}
-                    variant="outline"
-                    className="text-slate-400 hover:text-white"
-                  >
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share
-                  </Button>
-                )}
+              <div className="text-center space-y-2">
+                <p className="text-slate-400">Pay to: <span className="text-white font-medium">@{venmoId}</span></p>
+                <p className="text-slate-400">Amount: <span className="text-white font-medium">{results ? formatCurrency(results.perPerson) : '$0.00'}</span></p>
               </div>
             </div>
           )}
+          <div className="flex flex-col sm:flex-row justify-center gap-2 mt-4">
+            <Button
+              onClick={downloadQRCode}
+              variant="outline"
+              className="text-slate-400 hover:text-white w-full sm:w-auto"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Save QR Code
+            </Button>
+            {results && (
+              <Button
+                onClick={() => {
+                  const amount = isCustomSplit && results.customAmounts && results.customAmounts.length > 0
+                    ? results.customAmounts[currentQRIndex]?.amount
+                    : results.perPerson;
+                  const name = isCustomSplit && results.customAmounts && results.customAmounts.length > 0
+                    ? results.customAmounts[currentQRIndex]?.name
+                    : undefined;
+                  copyToClipboard(amount || 0, name);
+                }}
+                variant="outline"
+                className="text-slate-400 hover:text-white w-full sm:w-auto"
+              >
+                {copied ? (
+                  <Check className="h-4 w-4 mr-2" />
+                ) : (
+                  <Copy className="h-4 w-4 mr-2" />
+                )}
+                {copied ? 'Copied!' : 'Copy Link'}
+              </Button>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -14,7 +14,12 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Team Lunch Decider',
   description: 'Decide where to eat with your team',
-  viewport: 'width=device-width, initial-scale=1',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover',
+  themeColor: '#1e1b4b',
+  appleWebAppCapable: 'yes',
+  formatDetection: {
+    telephone: 'no',
+  },
 }
 
 export default function RootLayout({
@@ -23,9 +28,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} antialiased`}>
-      <body suppressHydrationWarning className={inter.className}>
-        {children}
+    <html lang="en" className={`${inter.variable} antialiased`} suppressHydrationWarning>
+      <body className={`${inter.className} min-h-screen flex flex-col`}>
+        <div className="flex-1">
+          {children}
+        </div>
         <Toaster />
       </body>
     </html>
