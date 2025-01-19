@@ -257,14 +257,6 @@ export function LocationInput({ onLocationSelect, className, autoDetectOnMount =
                     {error}
                 </div>
             )}
-
-            <div className="text-center py-8 text-slate-500">
-                {error ? (
-                    <p>Error loading places: {error}</p>
-                ) : (
-                    <p>Search for a location like &ldquo;Kansas City&rdquo; or &ldquo;NYC&rdquo; or &ldquo;94105&rdquo;</p>
-                )}
-            </div>
         </div>
     );
 } 
