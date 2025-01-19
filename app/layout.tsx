@@ -28,7 +28,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} antialiased`} suppressHydrationWarning>
-      <body className={`${inter.className} min-h-screen flex flex-col`}>
+      <head>
+        <style>{`
+          [data-new-gr-c-s-check-loaded],
+          [data-gr-ext-installed] {
+            display: revert !important;
+          }
+        `}</style>
+      </head>
+      <body 
+        className={`${inter.className} min-h-screen flex flex-col`}
+        suppressHydrationWarning
+      >
         <div className="flex-1">
           {children}
         </div>

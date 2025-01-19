@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,9 +31,17 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
   const [groupName, setGroupName] = useState('')
   const [userName, setUserName] = useState('')
   const [code, setCode] = useState('')
+  const [mounted, setMounted] = useState(false)
+  const [isCreating, setIsCreating] = useState(false)
 
-  const handleCreateGroup = () => {
-    if (!groupName.trim() || !userName.trim()) return
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim() || !userName.trim() || isCreating) return
+    
+    setIsCreating(true)
     const code = generateGroupCode();
     const newGroup = {
       name: groupName,
@@ -41,11 +49,45 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
       code,
       lastUpdated: new Date().toISOString()
     }
-    localStorage.setItem('group', JSON.stringify(newGroup))
-    localStorage.setItem('currentUser', userName.trim())
-    setCode(code)
-    setIsModalOpen(false)
-    onGroupCreated()
+
+    try {
+      // Create session on the server first
+      const response = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: code,
+          groupData: newGroup
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create session');
+      }
+
+      // If server creation successful, save to localStorage
+      localStorage.setItem('group', JSON.stringify(newGroup))
+      localStorage.setItem('currentUser', userName.trim())
+      setCode(code)
+      setIsModalOpen(false)
+      onGroupCreated()
+    } catch (error) {
+      console.error('Error creating group:', error);
+      // You might want to show an error message to the user here
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handlePickRestaurants = () => {
+    setIsModalOpen(true)
+  }
+
+  // Prevent hydration mismatch by not rendering until mounted
+  if (!mounted) {
+    return null
   }
 
   return (
@@ -198,7 +240,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                         className="w-full sm:w-auto"
                       >
                         <Button 
-                          onClick={() => router.push('/group')}
+                          onClick={handlePickRestaurants}
                           className="relative w-full sm:w-auto bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 md:px-8 py-5 md:py-6 text-base md:text-lg rounded-full group shadow-lg shadow-purple-500/25"
                         >
                           Pick your restaurants
@@ -477,10 +519,19 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
             <Button
               onClick={handleCreateGroup}
               className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white"
-              disabled={!groupName.trim() || !userName.trim()}
+              disabled={!groupName.trim() || !userName.trim() || isCreating}
             >
-              Create Group & Continue
-              <ArrowRight className="ml-2 h-4 w-4" />
+              {isCreating ? (
+                <>
+                  Creating...
+                  <span className="ml-2 animate-spin">⏳</span>
+                </>
+              ) : (
+                <>
+                  Create Group & Continue
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>
