@@ -12,7 +12,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'Team Lunch Decider',
+  title: 'BiteVote',
   description: 'Decide where to eat with your team',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0, viewport-fit=cover',
   themeColor: '#1e1b4b',
