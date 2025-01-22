@@ -214,6 +214,7 @@ export async function GET(request: Request) {
         }
 
         // Try with smaller radius first
+        // eslint-disable-next-line prefer-const
         let searchRadius = Math.min(radius || DEFAULT_RADIUS, MAX_RADIUS);
         let places = [];
         
@@ -230,7 +231,7 @@ export async function GET(request: Request) {
 
         // If no results and radius was less than max, try with max radius
         if (!places.length && searchRadius < MAX_RADIUS) {
-            searchParams.radius = MAX_RADIUS;
+            searchRadius = MAX_RADIUS;
             const expandedResponse = await gmaps.placesNearby({ params: searchParams });
             places = expandedResponse.data.results;
         }
