@@ -557,9 +557,15 @@ const features = [
   },
   {
     icon: <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
-            <span className="text-2xl">🎯</span>
+            <Image 
+              src="/venmo.png"
+              alt="Target icon"
+              width={24}
+              height={24}
+              className="w-6 h-6"
+            />
           </div>,
-    title: "Smart Results",
+    title: "Split Bills with Venmo",
     description: "Get instant results that everyone can agree on."
   }
 ]

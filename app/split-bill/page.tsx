@@ -18,11 +18,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import Image from 'next/image'
 
 export default function SplitBillPage() {
   const [totalAmount, setTotalAmount] = useState('')
   const [numberOfPeople, setNumberOfPeople] = useState('')
   const [tip, setTip] = useState('15')
+  const [isTipAmount, setIsTipAmount] = useState(false)
   const [venmoId, setVenmoId] = useState('')
   const [isCalculating, setIsCalculating] = useState(false)
   const [showQRDialog, setShowQRDialog] = useState(false)
@@ -120,8 +122,8 @@ export default function SplitBillPage() {
   const calculateSplit = () => {
     setIsCalculating(true)
     const amount = parseFloat(totalAmount)
-    const tipAmount = (amount * (parseInt(tip) / 100))
-    const total = amount + tipAmount
+    const calculatedTipAmount = isTipAmount ? parseFloat(tip) : (amount * (parseInt(tip) / 100))
+    const total = amount + calculatedTipAmount
 
     if (isCustomSplit) {
       // Validate total matches with a small tolerance for floating point errors
@@ -142,7 +144,7 @@ export default function SplitBillPage() {
 
       setResults({
         subtotal: amount,
-        tipAmount,
+        tipAmount: calculatedTipAmount,
         total,
         customAmounts
       })
@@ -152,7 +154,7 @@ export default function SplitBillPage() {
 
       setResults({
         subtotal: amount,
-        tipAmount,
+        tipAmount: calculatedTipAmount,
         total,
         perPerson
       })
@@ -258,11 +260,23 @@ export default function SplitBillPage() {
           className="max-w-md mx-auto"
         >
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-purple-500 mb-2">
-              Split the Bill
-            </h1>
+            <div className="flex items-center justify-center gap-2">
+              <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-purple-500 mb-2">
+                Split better with
+              </h1>
+              <Image 
+                src="/venmo.png"
+                alt="Venmo"
+                width={32}
+                height={32}
+                className="mb-2"
+              />
+              {/* <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-purple-500 mb-2">
+                enmo
+              </h1> */}
+            </div>
             <p className="text-slate-400">
-              Calculate how much each person owes
+              Add your venmo id and the bill amount to split the bill
             </p>
           </div>
 
@@ -348,13 +362,15 @@ export default function SplitBillPage() {
                         'default'
                       }
                       className={
-                        getOverallValidationStatus()?.status === 'error' ? 'bg-red-900/50 border-red-500' :
-                        getOverallValidationStatus()?.status === 'warning' ? 'bg-yellow-900/50 border-yellow-500' :
+                        getOverallValidationStatus()?.status === 'error' ? 'bg-red-900/50 border-red-500 text-white' :
+                        getOverallValidationStatus()?.status === 'warning' ? 'bg-yellow-900/50 border-yellow-500 text-white' :
                         'bg-green-900/50 border-green-500 text-green-200'
                       }
                     >
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
+                      {getOverallValidationStatus()?.status !== 'success' && (
+                        <AlertCircle className="h-4 w-4" />
+                      )}
+                      <AlertDescription className="text-white">
                         {getOverallValidationStatus()?.message}
                       </AlertDescription>
                     </Alert>
@@ -431,7 +447,7 @@ export default function SplitBillPage() {
                   </Button>
 
                   {remainingAmount > 0 && customSplitTotal > 0 && (
-                    <p className="text-sm text-slate-400">
+                    <p className="text-sm text-white">
                       Tip: Add another person or adjust amounts to match the total bill
                     </p>
                   )}
@@ -439,16 +455,38 @@ export default function SplitBillPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="tip" className="text-white">Tip Percentage</Label>
+                <div className="flex items-center justify-between mb-2">
+                  <Label htmlFor="tip" className="text-white">Tip {isTipAmount ? 'Amount' : 'Percentage'}</Label>
+                  <div className="flex items-center space-x-2">
+                    <Label htmlFor="tip-type" className="text-sm text-slate-400">Amount</Label>
+                    <Switch
+                      id="tip-type"
+                      checked={isTipAmount}
+                      onCheckedChange={setIsTipAmount}
+                    />
+                  </div>
+                </div>
                 <div className="relative">
-                  <Receipt className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                  {isTipAmount ? (
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                  ) : (
+                    <>
+                      <Receipt className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">%</span>
+                    </>
+                  )}
                   <Input
                     id="tip"
                     type="number"
-                    placeholder="15"
+                    placeholder={isTipAmount ? "0.00" : "15"}
                     value={tip}
-                    onChange={(e) => setTip(e.target.value)}
-                    className="pl-10 bg-slate-800 border-slate-700 text-white"
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '' || (!isTipAmount && /^\d+$/.test(value)) || (isTipAmount && /^\d*\.?\d{0,2}$/.test(value))) {
+                        setTip(value);
+                      }
+                    }}
+                    className={`${isTipAmount ? 'pl-10' : 'pl-10 pr-8'} bg-slate-800 border-slate-700 text-white`}
                   />
                 </div>
               </div>
@@ -476,7 +514,7 @@ export default function SplitBillPage() {
                         <span className="text-white font-medium">{formatCurrency(results.subtotal)}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-slate-400">Tip ({tip}%):</span>
+                        <span className="text-slate-400">Tip {isTipAmount ? '' : `(${tip}%)`}:</span>
                         <span className="text-white font-medium">{formatCurrency(results.tipAmount)}</span>
                       </div>
                       <div className="flex justify-between items-center">
