@@ -566,7 +566,7 @@ const features = [
             />
           </div>,
     title: "Split Bills with Venmo",
-    description: "Get instant results that everyone can agree on."
+    description: "Share and settle bills instantly with Venmo. Scan to pay!"
   }
 ]
 
@@ -574,28 +574,32 @@ const withoutAppPoints = [
   "Multiple Group Chats",
   "Endless Waiting",
   "Preference Chaos",
-  "Message Overload"
+  "Message Overload",
+  "Manual Bill Splitting"
 ]
 
 const traditionalPainPoints = [
   "Different groups on WhatsApp, Messenger, and other apps",
   "People take hours to respond or forget to reply",
   "Everyone has different preferences and dietary restrictions",
-  "Hundreds of messages just to pick a restaurant"
+  "Hundreds of messages just to pick a restaurant",
+  "Manually calculating and sending multiple Venmo requests"
 ]
 
 const withAppPoints = [
   "Unified Platform",
   "Real-time Voting",
   "Smart Matching",
-  "Instant Results"
+  "Instant Results",
+  "Automated Bill Splitting"
 ]
 
 const bitVoteBenefits = [
   "One place for all your group decisions, no app switching needed",
   "Everyone votes at their convenience, results in minutes",
   "Our algorithm considers everyone's preferences fairly",
-  "Clear winner selection without endless discussion"
+  "Clear winner selection without endless discussion",
+  "Instant Venmo payments with QR codes and direct links"
 ]
 
 function AboutMeSection() {
