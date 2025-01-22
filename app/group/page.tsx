@@ -813,10 +813,8 @@ function GroupContent() {
         throw new Error(data.error || 'Failed to cleanup session');
       }
 
-      // Execute cleanup script from response
-      if (data.script) {
-        eval(data.script);
-      }
+      // Clear local storage
+      localStorage.removeItem('group');
 
       // Show success toast
       toast({

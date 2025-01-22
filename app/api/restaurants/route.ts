@@ -1,4 +1,4 @@
-import { Client, PlaceDetailsRequest } from "@googlemaps/google-maps-services-js";
+import { Client } from "@googlemaps/google-maps-services-js";
 import { NextResponse } from 'next/server';
 
 interface Restaurant {
@@ -30,36 +30,41 @@ if (!GOOGLE_API_KEY) {
 
 const gmaps = new Client({});
 
-const getRestaurantData = async (place_id: string, key: string): Promise<Omit<Restaurant, 'id' | 'place_id' | 'priceRange' | 'distance' | 'vicinity'> | null> => {
-    const detailsParams: PlaceDetailsRequest['params'] = {
-        place_id,
-        fields: [
-            "name",
-            "rating",
-            "price_level"
-        ],
-        key
-    };
+// Add cache interface
+interface CacheEntry {
+  data: Restaurant[];
+  timestamp: number;
+}
 
-    try {
-        const detailsResponse = await gmaps.placeDetails({ params: detailsParams });
-        const result = detailsResponse.data.result;
+const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
+const REQUESTS_PER_MINUTE = 30;
+const DEFAULT_RADIUS = 2000; // Start with 2km radius
+const MAX_RADIUS = 5000; // Max 5km radius
+const LOCATION_CACHE_PRECISION = 3; // Round coordinates to 3 decimal places for cache
 
-        if (!result) {
-            console.log(`No details found for place_id: ${place_id}`);
-            return null;
-        }
+const cache: Record<string, CacheEntry> = {};
+const requestTimestamps: number[] = [];
 
-        return {
-            name: result.name || '',
-            rating: result.rating || null,
-            price_level: result.price_level || null,
-        };
-    } catch (error) {
-        console.error("Error fetching restaurant details:", error);
-        throw error;
+function generateCacheKey(lat: number, lng: number, cuisine: string | null | undefined): string {
+    // Round coordinates to reduce cache misses for nearby locations
+    const roundedLat = Number(lat.toFixed(LOCATION_CACHE_PRECISION));
+    const roundedLng = Number(lng.toFixed(LOCATION_CACHE_PRECISION));
+    return `${roundedLat},${roundedLng}-${cuisine || ''}`;
+}
+
+// Add rate limiting function
+function checkRateLimit(): boolean {
+    const now = Date.now();
+    // Remove timestamps older than 1 minute
+    while (requestTimestamps.length > 0 && requestTimestamps[0] < now - 60000) {
+        requestTimestamps.shift();
     }
-};
+    if (requestTimestamps.length >= REQUESTS_PER_MINUTE) {
+        return false;
+    }
+    requestTimestamps.push(now);
+    return true;
+}
 
 // Update the PlaceResult interface
 interface PlaceResult {
@@ -85,6 +90,7 @@ export async function GET(request: Request) {
         const longitude = url.searchParams.get('lng');
         const cuisine = url.searchParams.get('cuisine');
         const radius = parseInt(url.searchParams.get('radius') || '5000');
+        const random = url.searchParams.get('random') === 'true'; // Add random parameter
 
         console.log('API Request:', {
             location,
@@ -190,82 +196,95 @@ export async function GET(request: Request) {
             }, { status: 400 });
         }
 
-        const nearbySearchParams: NearbySearchParams = {
+        const cacheKey = generateCacheKey(searchLocation.lat, searchLocation.lng, cuisine);
+        const cachedResult = cache[cacheKey];
+        
+        if (cachedResult && Date.now() - cachedResult.timestamp < CACHE_DURATION) {
+            if (random) {
+                const randomIndex = Math.floor(Math.random() * cachedResult.data.length);
+                return NextResponse.json([cachedResult.data[randomIndex]]);
+            }
+            return NextResponse.json(cachedResult.data);
+        }
+
+        if (!checkRateLimit()) {
+            return NextResponse.json({
+                error: "Rate limit exceeded. Please try again later."
+            }, { status: 429 });
+        }
+
+        // Try with smaller radius first
+        let searchRadius = Math.min(radius || DEFAULT_RADIUS, MAX_RADIUS);
+        let places = [];
+        
+        const searchParams: NearbySearchParams = {
             location: searchLocation,
-            radius,
+            radius: searchRadius,
             type: 'restaurant',
             key: GOOGLE_API_KEY,
             ...(cuisine && { keyword: cuisine })
         };
 
-        const placesResponse = await gmaps.placesNearby({ params: nearbySearchParams });
-        const places = placesResponse.data.results;
+        const response = await gmaps.placesNearby({ params: searchParams });
+        places = response.data.results;
 
-        if (!places?.length) {
+        // If no results and radius was less than max, try with max radius
+        if (!places.length && searchRadius < MAX_RADIUS) {
+            searchParams.radius = MAX_RADIUS;
+            const expandedResponse = await gmaps.placesNearby({ params: searchParams });
+            places = expandedResponse.data.results;
+        }
+
+        if (!places.length) {
             return NextResponse.json({
                 error: "No restaurants found in this area",
                 location: searchLocation
             }, { status: 404 });
         }
 
+        // Process places
         const restaurants = await Promise.all(
-            (places as PlaceResult[]).map(async (place): Promise<Restaurant | null> => {
-                try {
-                    if (!place.place_id) {
-                        console.error('Place is missing place_id:', place);
-                        return null;
-                    }
-
-                    const details = await getRestaurantData(place.place_id, GOOGLE_API_KEY);
-                    if (!details) {
-                        console.log('No details found for restaurant:', place.name);
-                        return null;
-                    }
-
-                    // Calculate distance if not provided by the API
-                    const distance = place.distance ?? calculateDistance(
-                        searchLocation.lat,
-                        searchLocation.lng,
-                        place.geometry.location.lat,
-                        place.geometry.location.lng
-                    );
-
-                    return {
-                        id: place.place_id,
-                        ...details,
-                        priceRange: '$'.repeat(details.price_level || 1),
-                        distance,
-                        vicinity: place.vicinity || '',
-                        rating: details.rating || place.rating || null
-                    };
-                } catch (error) {
-                    console.error(`Error processing restaurant ${place.name}:`, error);
-                    return null;
-                }
+            places.map(async (place) => {
+                const placeResult = place as unknown as PlaceResult;
+                const distance = calculateDistance(
+                    searchLocation.lat,
+                    searchLocation.lng,
+                    placeResult.geometry.location.lat,
+                    placeResult.geometry.location.lng
+                );
+                
+                return {
+                    id: placeResult.place_id,
+                    name: placeResult.name,
+                    rating: placeResult.rating || null,
+                    price_level: null,
+                    priceRange: '$',
+                    distance,
+                    vicinity: placeResult.vicinity ?? ''
+                };
             })
         );
 
-        const validRestaurants = restaurants.filter((r): r is Restaurant => r !== null);
-
-        if (!validRestaurants.length) {
-            return NextResponse.json({
-                error: "Could not retrieve restaurant details",
-                location: searchLocation
-            }, { status: 404 });
+        // If random is true, randomly select one restaurant
+        if (random) {
+            const randomIndex = Math.floor(Math.random() * restaurants.length);
+            return NextResponse.json([restaurants[randomIndex]]);
         }
 
-        // Sort restaurants by rating and distance
-        validRestaurants.sort((a, b) => {
-            if (b.rating !== a.rating) {
-                return ((b.rating || 0) - (a.rating || 0));
-            }
-            return ((a.distance || 0) - (b.distance || 0));
+        // Otherwise sort and return top 4 as before
+        restaurants.sort((a, b) => {
+            if (b.rating !== a.rating) return ((b.rating || 0) - (a.rating || 0));
+            return (a.distance - b.distance);
         });
 
-        // Limit to 4 restaurants
-        const limitedRestaurants = validRestaurants.slice(0, 4);
+        const topRestaurants = restaurants.slice(0, 4);
 
-        return NextResponse.json(limitedRestaurants);
+        cache[cacheKey] = {
+            data: topRestaurants,
+            timestamp: Date.now()
+        };
+
+        return NextResponse.json(topRestaurants);
 
     } catch (error) {
         console.error("API Error:", error);
