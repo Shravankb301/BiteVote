@@ -150,12 +150,11 @@ const CheckOutArrow = () => {
 
   return (
     <motion.div
-      className="fixed left-8 top-[70vh] z-50 flex flex-col items-center"
+      className="fixed left-8 top-[70vh] z-50 hidden md:flex flex-col items-center pointer-events-none md:pointer-events-auto"
       initial={{ opacity: 0, y: 20 }}
       animate={{ 
         opacity: visible ? 1 : 0,
         y: visible ? 0 : 20,
-        display: visible ? 'flex' : 'none'
       }}
       transition={{ duration: 0.3 }}
     >
