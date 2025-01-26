@@ -173,7 +173,7 @@ export default function SplitBillPage() {
   const generatePaymentData = (amount: number) => {
     if (!venmoId) return '';
     
-    const note = encodeURIComponent('Split bill payment')
+    const note = encodeURIComponent('Bitevote bill payment')
     const venmoLink = `venmo://paycharge?txn=pay&recipients=${venmoId}&amount=${amount.toFixed(2)}&note=${note}`
     
     return venmoLink
@@ -218,7 +218,7 @@ export default function SplitBillPage() {
     
     const paymentText = `Pay ${formatCurrency(amount)} to @${venmoId}${name ? ` (${name})` : ''} via Venmo`
     const venmoLink = generatePaymentData(amount)
-    const textToCopy = `${paymentText}\n\nOpen in Venmo app:\n${venmoLink}\n\nOr click this link on your phone to open Venmo:\nhttps://venmo.com/${venmoId}?txn=pay&amount=${amount.toFixed(2)}&note=${encodeURIComponent('Split bill payment')}`
+    const textToCopy = `${paymentText}\n\nOpen in Venmo app:\n${venmoLink}\n\nOr click this link on your phone to open Venmo:\nhttps://venmo.com/${venmoId}?txn=pay&amount=${amount.toFixed(2)}&note=${encodeURIComponent('Bitevote bill payment')}`
     
     try {
       await navigator.clipboard.writeText(textToCopy)
