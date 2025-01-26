@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "./ui/badge"
-import { ArrowRight, Clock, Check, X, Sparkles, Pizza, Utensils, Briefcase, GraduationCap, User, Twitter, Linkedin, PhoneCall } from 'lucide-react'
+import { ArrowRight, Clock, Check, X, Sparkles, Pizza, Utensils, Briefcase, GraduationCap, User, Twitter, Linkedin, PhoneCall, ArrowDown, MessageSquare } from 'lucide-react'
 import { LucideGithub } from 'lucide-react'
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import Image from 'next/image'
 import Link from 'next/link'
 import {
@@ -20,6 +20,161 @@ import {
 } from "@/components/ui/dialog"
 import { generateGroupCode } from "@/lib/utils";
 import { useRouter } from 'next/navigation'
+import { Textarea } from "@/components/ui/textarea"
+
+// ShareFeedback Component
+const ShareFeedback = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const handleSubmit = async () => {
+    if (!feedback.trim()) return;
+    
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ feedback }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit feedback');
+      }
+
+      setFeedback('');
+      setIsOpen(false);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      // You might want to show an error message to the user here
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed top-4 right-4 z-50">
+      <Button
+        onClick={() => setIsOpen(!isOpen)}
+        className="bg-green-500 hover:bg-green-600 text-white rounded-full px-6 py-2 font-medium flex items-center gap-2"
+      >
+        <MessageSquare className="w-4 h-4" />
+        Share Feedback
+      </Button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            ref={dropdownRef}
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-14 right-0 w-80 bg-slate-900 border border-slate-800 rounded-lg shadow-xl p-4"
+          >
+            <Label htmlFor="feedback" className="text-white mb-2 block">Your Feedback</Label>
+            <Textarea
+              id="feedback"
+              placeholder="Enter your feedback..."
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              className="bg-slate-800 border-slate-700 text-white mb-4 min-h-[100px]"
+            />
+            <div className="flex justify-end">
+              <Button
+                onClick={handleSubmit}
+                disabled={!feedback.trim() || isSubmitting}
+                className="bg-green-500 hover:bg-green-600 text-white"
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit'}
+              </Button>
+            </div>
+          </motion.div>
+        )}
+
+        {showSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-14 right-0 bg-green-500/10 border border-green-500/20 text-green-400 px-4 py-2 rounded-lg"
+          >
+            Thank you for your feedback!
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// CheckOutArrow Component
+const CheckOutArrow = () => {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      // Get the scroll position
+      const scrollPosition = window.scrollY;
+      // Hide the arrow when scrolled past 300px (before reaching the features section)
+      setVisible(scrollPosition < 300);
+    };
+
+    // Add scroll event listener
+    window.addEventListener('scroll', handleScroll);
+
+    // Cleanup
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  return (
+    <motion.div
+      className="fixed left-8 top-[70vh] z-50 flex flex-col items-center"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ 
+        opacity: visible ? 1 : 0,
+        y: visible ? 0 : 20,
+        display: visible ? 'flex' : 'none'
+      }}
+      transition={{ duration: 0.3 }}
+    >
+      <motion.div
+        className="text-white text-lg font-semibold mb-2 bg-blue-500/10 px-4 py-2 rounded-full backdrop-blur-sm border border-blue-500/20"
+        animate={{ y: visible ? [0, -5, 0] : 0 }}
+        transition={{ repeat: Infinity, duration: 2 }}
+      >
+        See more!
+      </motion.div>
+      <motion.div
+        animate={{ y: visible ? [0, 5, 0] : 0 }}
+        transition={{ repeat: Infinity, duration: 1.5 }}
+      >
+        <ArrowDown className="w-8 h-8 text-blue-500" />
+      </motion.div>
+    </motion.div>
+  )
+}
 
 interface LandingPageProps {
   onGroupCreated: () => void;
@@ -93,6 +248,9 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
   return (
     <>
       <div className="min-h-screen bg-gradient-to-b from-violet-950 via-slate-900 to-slate-950 overflow-y-auto">
+        {/* Add ShareFeedback component */}
+        <ShareFeedback />
+        
         {/* Background elements */}
         <div className="fixed inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))] pointer-events-none translate-z-0" />
         <div className="fixed inset-0 pointer-events-none translate-z-0">
@@ -193,7 +351,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                           animate={{ opacity: 1 }}
                           transition={{ delay: 0.6 }}
                         >
-                          Effortless dining decisions,
+                          All Your Dining Needs,
                         </motion.span>
                         <motion.span
                           className="relative inline-flex items-center text-xl md:text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500"
@@ -201,7 +359,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                           animate={{ opacity: 1 }}
                           transition={{ delay: 0.8 }}
                         >
-                          zero debates,
+                          Effortless Decisions
                         </motion.span>
                         <motion.span
                           className="relative inline-flex items-center text-xl md:text-2xl font-semibold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-emerald-500"
@@ -209,19 +367,20 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                           animate={{ opacity: 1 }}
                           transition={{ delay: 1 }}
                         >
-                          all delicious!
+                          and Seamless Bill Splitting!
+                          <motion.div
+                            className="inline-block ml-2"
+                            animate={{ rotate: [0, 10, -10, 0] }}
+                            transition={{ repeat: Infinity, duration: 1.5 }}
+                          >
+                            <Pizza className="w-4 h-4 md:w-5 md:h-5 text-yellow-400" />
+                          </motion.div>
                         </motion.span>
                       </div>
                       <div className="flex items-center justify-center gap-2">
-                        <span className="text-base md:text-lg text-slate-400">
+                        {/* <span className="text-base md:text-lg text-slate-400">
                           From indecision to satisfaction in minutes
-                        </span>
-                        <motion.div
-                          animate={{ rotate: [0, 10, -10, 0] }}
-                          transition={{ repeat: Infinity, duration: 1.5 }}
-                        >
-                          <Pizza className="w-4 h-4 md:w-5 md:h-5 text-yellow-400 inline-block" />
-                        </motion.div>
+                        </span> */}
                       </div>
                     </motion.div>
                   </div>
@@ -458,7 +617,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                 Ready to make decisions easier with BitVote?
               </h2>
               <p className="text-slate-300 mb-8 max-w-2xl mx-auto text-lg">
-                Join thousands of groups who have simplified their dining decisions with BitVote.
+                Join groups from around the world who have simplified their dining decisions with BitVote.
               </p>
               <Button 
                 onClick={() => setIsModalOpen(true)}
@@ -474,6 +633,9 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
           <AboutMeSection />
         </div>
       </div>
+
+      {/* Add CheckOutArrow component */}
+      <CheckOutArrow />
 
       {/* Group Creation Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>

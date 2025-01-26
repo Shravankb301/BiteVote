@@ -276,7 +276,7 @@ export default function SplitBillPage() {
               </h1> */}
             </div>
             <p className="text-slate-400">
-              Add your venmo id and the bill amount to split the bill
+            Seamless Split: Add Venmo ID & Your Share!
             </p>
           </div>
 
