@@ -21,6 +21,7 @@ import {
 import { generateGroupCode } from "@/lib/utils";
 import { useRouter } from 'next/navigation'
 import { Textarea } from "@/components/ui/textarea"
+import Logo from "@/components/Logo"
 
 // ShareFeedback Component
 const ShareFeedback = () => {
@@ -247,6 +248,9 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
   return (
     <>
       <div className="min-h-screen bg-gradient-to-b from-violet-950 via-slate-900 to-slate-950 overflow-y-auto">
+        {/* Logo is now handled by the Logo component */}
+        <Logo />
+        
         {/* Add ShareFeedback component */}
         <ShareFeedback />
         
