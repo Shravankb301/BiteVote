@@ -48,9 +48,11 @@ export default function RootLayout({
         className={`${inter.className} min-h-screen flex flex-col`}
         suppressHydrationWarning
       >
-        <Logo />
-        <div className="flex-1">
-          {children}
+        <div className="relative flex-1">
+          <Logo />
+          <div className="flex-1">
+            {children}
+          </div>
         </div>
         <Toaster />
         <Analytics />
