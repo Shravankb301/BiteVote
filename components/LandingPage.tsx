@@ -405,7 +405,7 @@ export default function LandingPage({ onGroupCreated }: LandingPageProps) {
                           onClick={handlePickRestaurants}
                           className="relative w-full sm:w-auto bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white px-6 md:px-8 py-5 md:py-6 text-base md:text-lg rounded-full group shadow-lg shadow-purple-500/25"
                         >
-                          Pick your restaurants
+                          Live vote restaurants
                           <motion.div
                             animate={{ x: [0, 5, 0] }}
                             transition={{ repeat: Infinity, duration: 1.5 }}
